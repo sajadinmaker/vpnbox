@@ -2,7 +2,8 @@
 
 **A free VPN for Linux that needs no account, no key, and no payment.**
 
-v1.0.0-beta2 · 2026-10-20 · one Python file, standard library only
+v1.0.0-beta3 · 2026-10-20 · one Python file, standard library only
+built by **sajad** — <https://github.com/sajadinmaker>
 
 ---
 
@@ -35,8 +36,8 @@ Arch …), plus Python 3.8+. `install.sh` checks all of this for you:
 Grab the release tarball, unpack, install:
 
 ```bash
-tar -xzf vpnbox-1.0.0-beta2.tar.gz
-cd vpnbox-1.0.0-beta2
+tar -xzf vpnbox-1.0.0-beta3.tar.gz
+cd vpnbox-1.0.0-beta3
 sudo ./install.sh            # → /usr/local/bin/vpn, verified with --version
 ```
 
@@ -68,18 +69,20 @@ command to copy-paste if you forget.
 Run `vpn` with no arguments (or `vpn intro`):
 
 ```
-██╗   ██╗██████╗ ███╗   ██╗██████╗  ██████╗ ██╗  ██╗
-██║   ██║██╔══██╗████╗  ██║██╔══██╗██╔═══██╗██║ ██╔╝
-██║   ██║██████╔╝██╔██╗ ██║██████╔╝██║   ██║█████╔╝
-╚██╗ ██╔╝██╔═══╝ ██║╚██╗██║██╔══██╗██║   ██║██╔═██╗
- ╚████╔╝ ██║     ██║ ╚████║██║  ██║╚██████╔╝██║  ██╗
-  ╚═══╝  ╚═╝     ╚═╝  ╚═══╝╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═╝
-vpnbox 1.0.0-beta2 — free public VPN for Linux · no account · no key
+##   ## #####  ##   ## #####   ####  ##  ##
+##   ## ##  ## ###  ## ##  ## ##  ##  ## #
+##   ## ##  ## ## # ## ##  ## ##  ##   ##
+ ## ##  #####  ##  ### #####  ##  ##   ##
+ ## ##  ##     ##   ## ##  ## ##  ##  # ##
+  ###   ##     ##   ## #####   ####  ##  ##
+vpnbox 1.0.0-beta3 — free public VPN for Linux · no account · no key
+by sajad — github.com/sajadinmaker
 
  │ ● not connected  ·  your IP: 192.140.152.149 · Bengaluru, India
  │ cache : 214 servers · 14 countries · refreshed 5 min ago
 
  [R]efresh   [C]onnect   [S]ites   [D]isconnect   [Q]uit
+ quick: [1] best server   [2] country / city   [3] near an office
 ```
 
 A key-driven shell, built from the same one file with no curses dependency:

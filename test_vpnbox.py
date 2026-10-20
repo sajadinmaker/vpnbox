@@ -11,8 +11,6 @@ import unittest.mock
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import vpnbox as v  # noqa: E402
 
-INTRO_FAKE = v.INTRO_KEYS  # referenced by the dispatch test for readability
-
 
 def server(**over):
     """Synthetic VPN Gate server record (exact parse_server() shape)."""
@@ -142,10 +140,12 @@ class Intro(unittest.TestCase):
                  "age": 300, "ip": "203.0.113.9", "city": "Bengaluru",
                  "country": "India"}
 
-    def test_banner_is_block_art(self):
+    def test_banner_is_pure_ascii_slabs(self):
         lines = v.BANNER.splitlines()
         self.assertGreaterEqual(len(lines), 5)
-        self.assertIn("██╗", v.strip_ansi("\n".join(lines)))
+        self.assertTrue(all(ord(c) < 128 for line in lines for c in line),
+                        "banner must be pure ASCII to render everywhere")
+        self.assertIn("#####", "\n".join(lines))
 
     def test_strip_ansi_and_fit_center(self):
         self.assertEqual(v.strip_ansi("\x1b[32mabc\x1b[0m"), "abc")
@@ -155,8 +155,8 @@ class Intro(unittest.TestCase):
         self.assertTrue(v.strip_ansi(padded).endswith("ok"))
 
     def test_intro_key_dispatch_table(self):
-        self.assertEqual(sorted(v.INTRO_KEYS), ["c", "d", "q", "r", "s"])
-        self.assertEqual(set(INTRO_FAKE) is not None and True, True)
+        self.assertEqual(sorted(v.INTRO_KEYS),
+                         ["1", "2", "3", "c", "d", "q", "r", "s"])
 
     def test_bare_invocation_routes_to_intro(self):
         ap = v.build_parser()

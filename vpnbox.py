@@ -47,7 +47,7 @@ import urllib.parse
 import urllib.request
 
 APP = "vpnbox"
-APP_VERSION = "1.0.0-beta2"
+APP_VERSION = "1.0.0-beta3"
 UA = f"{APP}/{APP_VERSION} (linux; free public VPN client)"
 PID_FILE = "/run/vpnbox.pid"
 LOG_FILE = "/var/log/vpnbox.log"
@@ -1356,16 +1356,17 @@ def cmd_sites(args):
 # ----------------------------------------------------------------------------
 
 BANNER = """\
-██╗   ██╗██████╗ ███╗   ██╗██████╗  ██████╗ ██╗  ██╗
-██║   ██║██╔══██╗████╗  ██║██╔══██╗██╔═══██╗██║ ██╔╝
-██║   ██║██████╔╝██╔██╗ ██║██████╔╝██║   ██║█████╔╝
-╚██╗ ██╔╝██╔═══╝ ██║╚██╗██║██╔══██╗██║   ██║██╔═██╗
- ╚████╔╝ ██║     ██║ ╚████║██║  ██║╚██████╔╝██║  ██╗
-  ╚═══╝  ╚═╝     ╚═╝  ╚═══╝╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═╝"""
+##   ## #####  ##   ## #####   ####  ##  ##
+##   ## ##  ## ###  ## ##  ## ##  ##  ## #
+##   ## ##  ## ## # ## ##  ## ##  ##   ##
+ ## ##  #####  ##  ### #####  ##  ##   ##
+ ## ##  ##     ##   ## ##  ## ##  ##  # ##
+  ###   ##     ##   ## #####   ####  ##  ##"""
 
 INTRO_KEYS = {
     "r": "refresh", "c": "connect", "s": "sites",
     "d": "disconnect", "q": "quit",
+    "1": "connect1", "2": "connect2", "3": "connect3",
 }
 
 
@@ -1485,6 +1486,7 @@ def intro_render(s, msg=""):
                           "no account · no key", w))
     out.append(fit_center("data: VPN Gate (vpngate.net) · geocode: "
                           "OpenStreetMap · ip-api", w))
+    out.append(fit_center("by sajad — github.com/sajadinmaker", w))
     out.append("")
     state = green("● CONNECTED") if s["connected"] else red("○ not connected")
     loc = "unknown (offline?)"
@@ -1508,6 +1510,8 @@ def intro_render(s, msg=""):
         out.append(fit_center(yellow(msg), w))
     out.append("")
     out.append(fit_center(intro_menu(), w))
+    out.append(fit_center("quick: [1] best server   [2] country / city   "
+                          "[3] near an office", w))
     out.append(fit_center("type a letter · esc/q leaves · e.g. vpn connect "
                           "--site instagram --office Tokyo", w))
     return "\n".join(out)
@@ -1519,6 +1523,7 @@ def intro_static():
         print(line)
     print(f"{APP} {APP_VERSION} — free public VPN for Linux over VPN Gate "
           "(vpngate.net)")
+    print("by sajad — github.com/sajadinmaker")
     s = intro_snapshot(fetch=False)
     state = "connected" if s["connected"] else "not connected"
     if s["servers"] == 0:
@@ -1608,19 +1613,22 @@ def _connect_via(argv):
             else f"exit code {rc} (messages above)")
 
 
-def intro_wizard():
+def intro_wizard(preset=None):
     cache = load_cache()
     servers = (cache or {}).get("servers") or []
     if not servers:
         return "nothing cached yet — press [R] to refresh first"
-    print("\x1b[H\x1b[2J")
-    print(bold("connect — pick a mode"))
-    print("  1) best available anywhere     (fastest route, any country)")
-    print("  2) by country / city")
-    print("  3) appear near a platform office")
-    mode = _ask("mode [1/2/3] (default 1): ", "1")
-    if mode is None:
-        return "aborted"
+    if preset is None:
+        print("\x1b[H\x1b[2J")
+        print(bold("connect — pick a mode"))
+        print("  1) best available anywhere     (fastest route, any country)")
+        print("  2) by country / city")
+        print("  3) appear near a platform office")
+        mode = _ask("mode [1/2/3] (default 1): ", "1")
+        if mode is None:
+            return "aborted"
+    else:
+        mode = preset
     if mode == "3":
         key = _pick_site()
         if not key:
@@ -1696,8 +1704,9 @@ def cmd_intro(args):
                 break
             elif act == "refresh":
                 msg = intro_refresh()
-            elif act == "connect":
-                msg = intro_wizard()
+            elif act in ("connect", "connect1", "connect2", "connect3"):
+                preset = act[-1] if act != "connect" else None
+                msg = intro_wizard(preset=preset)
             elif act == "sites":
                 key2 = _pick_site()
                 if key2 is None or not key2:

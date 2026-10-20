@@ -3,6 +3,22 @@
 All notable changes to vpnbox. The first stable will be `1.0.0`; the beta
 cycle uses `1.0.0-beta1`, `1.0.0-beta2`, …
 
+## 1.0.0-beta3 — 2026-10-20
+
+### Added
+- Author credit: "by sajad — github.com/sajadinmaker" on the intro screen,
+  static banner, README and LICENSE
+- One-key quick actions from the intro screen: `[1]` best server anywhere,
+  `[2]` country / city, `[3]` appear near an office (skips the wizard menu)
+
+### Changed
+- Intro banner rebuilt as **pure ASCII** slab letters — renders correctly on
+  every terminal font (the previous art used box-drawing glyphs that can
+  mangle on some fonts). A regression test now enforces ASCII-only banner.
+- README quick-start made friendlier for new users: numbered menu shown in
+  the docs, credit at the top, LICENSE copyright now "sajad (sajadinmaker)
+  and vpnbox contributors"
+
 ## 1.0.0-beta2 — 2026-10-20
 
 ### Added
