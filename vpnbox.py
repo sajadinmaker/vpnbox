@@ -1357,8 +1357,17 @@ def cmd_sites(args):
 # interactive intro — bare `vpn` / `vpn intro`; pure ANSI + stdlib, no curses
 # ----------------------------------------------------------------------------
 
-TITLE = "   ".join("VPNBOX")       # letterspaced, painted bold red
-RULE = "─" * 60                    # thin red rule under the title
+TITLE = "   ".join("VPNBOX")       # letterspaced; rendered as a bold red bar
+
+_PROMPT_SOAK = 0.35   # seconds a dialog ignores typed-ahead keystrokes
+
+
+def intro_titlebar(width=80):
+    """big & bold app name: white-on-red reverse strip, scales to terminal."""
+    bar_w = min(max(len(TITLE) + 24, 48), max(26, width - 10))
+    pad = (bar_w - len(TITLE)) // 2
+    inner = " " * pad + TITLE + " " * (bar_w - pad - len(TITLE))
+    return paint(inner, "1;37;41")     # bold white on red background
 
 # ordered most-common-first (lazygit/k9s pattern: numeric keys jump straight
 # to an action from anywhere on the screen; letters stay as secret aliases)
@@ -1409,6 +1418,10 @@ def ansi_ok():
 def read_key():
     """one keypress → letter/number (lower), 'enter', 'up', 'down', 'esc'.
 
+    Uses os.read (unbuffered) — with sys.stdin.read(1) the bytes typed
+    *ahead* (e.g. '2' then Enter in one burst) stay in Python's buffer and
+    leak into the next input() prompt as an instant blank answer.
+
     Terminal raw mode is always restored before returning (sudo prompts and
     KeyboardInterrupt inside the UI therefore behave normally)."""
     import select
@@ -1419,13 +1432,13 @@ def read_key():
     old = termios.tcgetattr(fd)
     try:
         tty.setraw(fd)
-        ch = sys.stdin.read(1)
+        ch = os.read(fd, 1)
     finally:
         termios.tcsetattr(fd, termios.TCSADRAIN, old)
-    if ch == "\x1b":
-        if select.select([sys.stdin], [], [], 0.05)[0]:
+    if ch == b"\x1b":
+        if select.select([fd], [], [], 0.05)[0]:
             try:
-                seq = sys.stdin.read(2)
+                seq = os.read(fd, 2).decode("ascii", "replace")
             except OSError:
                 seq = ""
             if seq == "[A":
@@ -1434,11 +1447,26 @@ def read_key():
                 return "down"
             return "esc"
         return "esc"
-    if ch in ("\r", "\n"):
+    if ch in (b"\r", b"\n"):
         return "enter"
-    if ch == "\x03":          # Ctrl-C arrives as a plain char in raw mode
+    if ch == b"\x03":          # Ctrl-C arrives as a plain char in raw mode
         return "q"
-    return ch.lower()
+    return ch.decode("utf-8", "replace").lower()
+
+
+def _drain_stdin():
+    """consume everything the terminal already has queued (typed-ahead keys).
+
+    A plain read-and-check loop in non-blocking windows — this works on any
+    terminal/PTY, unlike termios.tcflush() which is a silent no-op on some.”"""
+    fd = sys.stdin.fileno()
+    try:
+        import select
+        while select.select([fd], [], [], 0)[0]:
+            if not os.read(fd, 512):
+                break
+    except OSError:
+        pass
 
 
 _GEO_MEMO = {"t": 0.0, "g": None}
@@ -1496,8 +1524,8 @@ def intro_action_rows(sel):
 
 def intro_render(s, msg="", sel=0):
     w = max(64, min(tty_width(), 100))
-    out = [fit_center(paint(TITLE, "1;31"), w),      # bold red title
-           fit_center(paint(RULE, "31"), w),         # thin red rule
+    out = [fit_center(intro_titlebar(w), w),        # big bold red name
+           fit_center(paint("─" * min(60, max(20, w - 12)), "31"), w),
            fit_center(dim(f"{APP} {APP_VERSION}"
                           " · by sajad — github.com/sajadinmaker"), w),
            ""]
@@ -1537,8 +1565,7 @@ def intro_render(s, msg="", sel=0):
 
 def intro_static():
     """non-TTY path (pipes, CI): title + status + numbered menu, exit 0."""
-    print(paint(TITLE, "1;31"))
-    print(paint(RULE, "31"))
+    print(intro_titlebar(80))
     print(dim("by sajad — github.com/sajadinmaker"))
     print()
     s = intro_snapshot(fetch=False)
@@ -1575,13 +1602,80 @@ def run_in_ui(argv):
     return rc
 
 
-def _ask(prompt, default=""):
+def _readline(prompt, allow_esc=True):
+    """raw-mode line input with live echo — controls every byte.
+
+    Enter (even a stray, fast-typed one) COMMITS a forward default instead
+    of bouncing back out of the dialog; Esc (or Ctrl-C/D) goes back.
+    Returns the trimmed text ('' if only Enter), None on Esc/EOF."""
+    import select as _sel
+    import termios as _t
+    import time as _time
+    import tty as _tty
+
+    out = sys.stdout
+    out.write("\x1b[?25h" + prompt)      # caret visible while typing
+    out.flush()
+    fd = sys.stdin.fileno()
     try:
-        a = input(prompt).strip()
-    except (EOFError, KeyboardInterrupt):
-        print()
-        return None
-    return a or default
+        old = _t.tcgetattr(fd)
+    except Exception:                    # no real TTY (pipes/tests): fall back
+        try:
+            return input().strip()
+        except (EOFError, KeyboardInterrupt):
+            return None
+    # SOAK: swallow the accelerator burst ("2" then Enter within ~60 ms)
+    # for the first moments of the dialog; anything typed while the list
+    # was still rendering is typed-ahead noise, not an answer. Piped input
+    # (no TTY) is never soaked — scripted answers are all purposeful.
+    opened = _time.time()
+    while _time.time() - opened < _PROMPT_SOAK:
+        _drain_stdin()
+        _time.sleep(0.05)
+        out.flush()
+    _drain_stdin()
+    try:
+        _tty.setraw(fd)
+    except Exception:
+        pass
+    raw_on = True
+    buf = ""
+    try:
+        while True:
+            b = os.read(fd, 1)
+            ch = b.decode("utf-8", "replace") if b else ""
+            if ch in ("\r", "\n"):           # commit a DEFAULT, never a bail
+                out.write("\n")
+                out.flush()
+                return buf.strip()
+            if ch in ("\x7f", "\x08"):
+                if buf:
+                    buf = buf[:-1]
+                    out.write("\b \b")
+            elif ch == "\x1b":
+                seq = ""
+                if _sel.select([fd], [], [], 0.02)[0]:
+                    seq = os.read(fd, 2).decode("ascii", "replace")
+                if seq in ("[A", "[B"):      # arrows: ignore, stay alive
+                    continue
+                out.write("\n")
+                out.flush()
+                return None
+            elif ch in ("\x03", "\x04"):     # ctrl-c / ctrl-d = back
+                out.write("\n")
+                out.flush()
+                return None
+            elif ch and (ch == " " or not ch.isspace()):
+                buf += ch
+                out.write(ch)
+            out.flush()
+    finally:
+        if raw_on:
+            try:
+                _t.tcsetattr(fd, _t.TCSADRAIN, old)
+            except Exception:
+                pass
+    return None
 
 
 def _pick_site():
@@ -1591,9 +1685,11 @@ def _pick_site():
     print(bold("Appear near which platform?") + dim(f"  ({total} offices worldwide)"))
     for i, name in enumerate(sites, 1):
         print(f"  {i:2})  {clip(name, 14):<14}  {clip(SITES[name]['label'], 42)}")
-    pick = _ask("\nnumber or name, Enter = back: ")
-    if pick in (None, ""):
+    pick = _readline("\nnumber or name (Enter = the 1st one, Esc = back): ")
+    if pick is None:
         return None
+    if pick == "":
+        return sites[0]
     if pick.isdigit() and 1 <= int(pick) <= len(sites):
         return sites[int(pick) - 1]
     key, site = resolve_site(pick)
@@ -1616,7 +1712,7 @@ def _pick_office(key, servers):
             near = f"{d:,.0f} km · {clip(b['city'] or b['host'], 20)} ({b['cc']})"
         star = "◈" if hit else " "
         print(f" {i:2}{star} {clip(place, 32):<32} {near}")
-    pick = _ask("\nnumber, 'all', or Enter for HQ: ")
+    pick = _readline("\nnumber, 'all' (Enter = HQ, Esc = back): ")
     if pick is None:
         return None
     if pick.lower() == "all":
@@ -1657,23 +1753,28 @@ def intro_wizard(preset):
         for r in servers:
             counts[r["cc"]] = counts.get(r["cc"], 0) + 1
             names[r["cc"]] = r["country"]
+        order = sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
         print()
-        print(bold("Which country?"))
-        for i, (cc, n) in enumerate(
-                sorted(counts.items(), key=lambda kv: (-kv[1], kv[0])), 1):
+        print(bold("Which country?") +
+              dim(f"  (Enter = {order[0][0]} — {names[order[0][0]]})"))
+        for i, (cc, n) in enumerate(order, 1):
             print(f"  {i:2})  {cc:<5} {clip(names[cc], 34):<34} "
                   f"{n} live servers")
             if i >= 30:
                 print("       … more — just type any country code or name")
                 break
-        cc = _ask("\ncode, name, or number, Enter = back: ")
-        if cc in (None, ""):
+        cc = _readline("\nnumber or code (Enter = top pool, Esc = back): ")
+        if cc is None:
             return "! cancelled — back to the menu"
-        chosen = cc if cc in counts else (
-            cc.upper() if cc.upper() in counts else cc)
-        city = _ask("city? optional, matching anywhere (Enter to skip): ")
-        if city is None:
-            return "! cancelled — back to the menu"
+        if cc == "":
+            chosen = order[0][0]
+        elif cc.isdigit() and 1 <= int(cc) <= len(order):
+            chosen = order[int(cc) - 1][0]
+        else:
+            chosen = cc if cc in counts else (
+                cc.upper() if cc.upper() in counts else cc)
+        city = _readline("city? optional, matching anywhere "
+                         "(Enter to skip, Esc = skip): ")
         argv = ["sudo", "vpn", "connect", "--country", chosen]
         if city:
             argv += ["--city", city]
@@ -1704,7 +1805,12 @@ def intro_run(idx):
     aid, _desc, fn = INTRO_ACTIONS[idx]
     if aid == "quit":
         return None
-    return fn()
+    _drain_stdin()                              # typed-ahead keys must not
+    print("\x1b[?25h", end="", flush=True)      # answer dialogs; show caret
+    try:
+        return fn()
+    finally:
+        print("\x1b[?25l", end="", flush=True)  # hidden again on the menu
 
 
 def cmd_intro(args):
@@ -1726,22 +1832,24 @@ def cmd_intro(args):
                 break
             elif key == "up":
                 sel = (sel - 1) % len(INTRO_ACTIONS)
+                continue
             elif key == "down":
                 sel = (sel + 1) % len(INTRO_ACTIONS)
+                continue
             elif key == "enter":
-                msg = intro_run(sel)
-                if msg is None:
-                    break
+                idx = sel
             elif key in ("1", "2", "3", "4", "5", "6"):
                 sel = int(key) - 1
-                msg = intro_run(sel)
-                if msg is None:
-                    break
+                idx = sel
             elif key in INTRO_KEYS:
                 sel = INTRO_KEYS[key]
-                msg = intro_run(sel)
-                if msg is None:
-                    break
+                idx = sel
+            else:
+                continue
+            msg = intro_run(idx)
+            _drain_stdin()          # trailing keystrokes must not re-run the
+            if msg is None:         # menu (the same typed-ahead poison)
+                break
     finally:
         print("\x1b[?25h", end="")                # cursor back
         print()

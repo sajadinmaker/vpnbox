@@ -3,6 +3,7 @@
 Run from the repo root:
     python3 -m unittest discover -s . -p "test_*.py" -v     (or: make test)
 """
+import inspect
 import os
 import sys
 import unittest
@@ -145,6 +146,78 @@ class Intro(unittest.TestCase):
         self.assertNotIn("▁", v.TITLE)
         self.assertNotIn("#", v.TITLE)
         self.assertEqual("".join(v.TITLE.split()), "VPNBOX")
+
+    def test_read_key_uses_unbuffered_reads(self):
+        # regression: sys.stdin.read(1) kept typed-ahead bytes (e.g. '2' +
+        # Enter in one burst) in Python's buffer, leaking them into the next
+        # input() as a blank answer → dialogs cancelled instantly
+        import inspect
+        src = inspect.getsource(v.read_key)
+        self.assertIn("os.read", src)
+        code_only = src.split('"""', 2)[2]      # skip the docstring's own story
+        self.assertNotIn("sys.stdin.read(1)", code_only)
+
+    def test_intro_run_drains_stdin_before_actions(self):
+        calls = []
+        stub = []
+        with unittest.mock.patch.object(
+                v, "_drain_stdin", side_effect=lambda: calls.append(1)), \
+             unittest.mock.patch.object(
+                 v, "INTRO_ACTIONS", [("fastest", "x", lambda: stub.append(1))]):
+            self.assertEqual(v.intro_run(0), None)
+        self.assertEqual(calls, [1])
+        self.assertEqual(stub, [1])
+
+    def test_dialog_entry_never_bounces_back_on_enter(self):
+        # regression: pressing Enter right after a menu number used to count
+        # as "go back" and dumped the user onto the menu — Enter must commit
+        # a forward default, Esc / Esc-only exits are the way back
+        site = inspect.getsource(v._pick_site)
+        country = inspect.getsource(v.intro_wizard)
+        self.assertIn("_readline", site)
+        self.assertIn('_readline', country)
+        self.assertIn('== ""', site)             # empty Enter → first entry
+        self.assertIn('chosen = order[0][0]', country)
+        self.assertIn('return []', inspect.getsource(v._pick_office))
+        rl = inspect.getsource(v._readline)
+        self.assertIn("_drain_stdin()", rl)
+        # the only input() left is the guarded non-TTY fallback
+        self.assertEqual(rl.count("input()"), 1)
+        # soak only runs on a real TTY — piped answers must survive
+        self.assertLess(v._PROMPT_SOAK, 0.5)
+        self.assertIn("_PROMPT_SOAK", rl)
+
+    def test_country_prompt_resolves_list_numbers(self):
+        # regression: typing "1" had to pick the 1st listed country (JP),
+        # not pass the literal digit through as --country 1
+        src = inspect.getsource(v.intro_wizard)
+        self.assertIn("cc.isdigit()", src)
+        self.assertIn("order[int(cc) - 1][0]", src)
+
+    def test_arrows_only_move_the_menu(self):
+        # regression: up/down accidentally fell through into intro_run() with
+        # an unbound index — a NameError crash on the very first arrow press
+        src = inspect.getsource(v.cmd_intro)
+        between = src.split('elif key == "enter"', 1)[0]
+        self.assertEqual(between.count("continue"), 2)   # up/down re-render
+
+    def test_titlebar_is_big_and_bold(self):
+        for width in (70, 100, 200):
+            bar = v.intro_titlebar(width)
+            self.assertIn("V", v.strip_ansi(bar))
+            # a roomy bar (48+ visible chars) — reads as a bold name strip
+            self.assertGreaterEqual(len(v.strip_ansi(bar)), 46)
+            # never wider than the terminal
+            self.assertLessEqual(len(v.strip_ansi(bar)), width - 10)
+
+    def test_render_fits_any_terminal_width(self):
+        import re
+        for width in (64, 80, 110, 160):
+            with unittest.mock.patch.object(v, "tty_width", return_value=width):
+                text = v.intro_render(self.FAKE_SNAP, sel=0)
+            vis = max(len(l) for l in text.splitlines())
+            self.assertLessEqual(vis, width,
+                                 f"line overflows a {width}-col terminal")
 
     def test_strip_ansi_and_fit_center(self):
         self.assertEqual(v.strip_ansi("\x1b[32mabc\x1b[0m"), "abc")

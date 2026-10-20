@@ -17,9 +17,20 @@ cycle uses `1.0.0-beta1`, `1.0.0-beta2`, …
   lines ("no account, no key", "sources: …") are gone for good
 - Plain-English wording throughout: "your IP / exit IP", "96 live servers
   · 8 countries", "list refreshed 5 min ago" — jargon gone
-- Cancel paths clarified: Enter on any prompt backs out ("back to the
-  menu"), nothing ever leaves you stranded; success/error feedback is ✓
-  green / ✗ red in one status line
+- Prompt semantics made foolproof: **Enter commits a forward default**
+  (the top pool / first entry / HQ — shown right in the prompt), **Esc
+  backs out** cleanly; nothing ever leaves you stranded, and success/
+  error feedback is ✓ green / ✗ red in one status line
+- **Fast-typing proof**: keys typed ahead (e.g. a number then Enter in one
+  burst) are drained instead of answering the next dialog on their own —
+  a dialog's first 0.35 s ignore pre-typed noise, and trailing keystrokes
+  can no longer re-run a menu item after an action; typed-ahead input
+  can no longer be answered by the terminal's own `tcflush` no-op either
+- Dialogs are read through a raw-mode line reader with live echo (backspace
+  works, caret visible), replacing cooked `input()`
+- App name rendered as a **big bold white-on-red bar** that scales to the
+  terminal, with the throttled rule and credit line beneath — menus stay
+  centered and fit 64–110 col terminals responsively
 - Version naming simplified to plain `1.0.0-beta` (the beta cycle's
   numbered tags v1.0.0-beta1…beta4 stay published on GitHub)
 

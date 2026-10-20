@@ -69,7 +69,7 @@ command to copy-paste if you forget.
 Run `vpn` with no arguments (or `vpn intro`):
 
 ```
-        V   P   N   B   O   X
+  [            V   P   N   B   O   X            ]   ← bold white on a red bar
   ────────────────────────────────────────────────
   vpnbox 1.0.0-beta · by sajad — github.com/sajadinmaker
 
@@ -88,15 +88,19 @@ Run `vpn` with no arguments (or `vpn intro`):
  ↑/↓ select · 1–6 quick · Enter run · q quit
 ```
 
-Everything is on a clean red-accented screen — bold red title, a thin red
-rule, and a red-bordered live status panel; no ASCII art, no slogans.
-Patterned after well-loved TUIs (lazygit, btop, htop): up/down moves the
-highlight, Enter runs it, **1–6 do it instantly**, q leaves, and every
-prompt accepts Enter to bail you out — you can never get stuck. Pressing
-**1** connects to the fastest server in one keystroke; **3** walks you
-through picking a platform and office with plain numbered questions. The
-status panel re-renders after every action, and in pipes or CI the bare
-run degrades gracefully to the red title + numbered command list, exit 0.
+Everything is on a clean red-accented screen — a big bold white-on-red
+**VPNBOX** name bar that scales to your terminal, a throttled red rule, and
+a red-bordered live status panel; no ASCII art, no slogans. Patterned
+after well-loved TUIs (lazygit, btop, htop): up/down moves the highlight,
+Enter runs it, **1–6 do it instantly**, q leaves. Dialogs follow the same
+rule everywhere: **Enter commits the forward choice** (the top pool, the
+first entry, or the HQ — always shown in the prompt), **Esc backs out**.
+Type fast — a number followed by Enter in one burst — and the stray
+Enter can never answer a dialog for you. Pressing **1** connects to the
+fastest server in one keystroke; **3** walks you through picking a
+platform and office with plain numbered questions. The status panel
+re-renders after every action, and in pipes or CI the bare run degrades
+gracefully to the red title + numbered command list, exit 0.
 
 ## Everyday connections
 
