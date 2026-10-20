@@ -1,146 +1,220 @@
-# vpnbox — free public-VPN manager for Linux
+# vpnbox
 
-**v1.0.0-beta1** (2026-10-20) — single file, stdlib-only Python 3.
+**A free VPN for Linux that needs no account, no key, and no payment.**
 
-A from-scratch VPN client/manager (single file, stdlib-only Python) built on top of
-**VPN Gate** — the open academic VPN relay experiment of the University of Tsukuba
-(<https://vpngate.net>). It lists volunteer-run public VPN servers **live** (no account,
-no key, no payment), adds **city/ISP geolocation**, and connects via OpenVPN while
-keeping system DNS on systemd-resolved (no DNS leaks).
+v1.0.0-beta1 · 2026-10-20 · one Python file, standard library only
 
-## Install / uninstall
+---
+
+vpnbox turns the public internet's most underrated resource — the [VPN Gate](https://vpngate.net)
+relay experiment run by the University of Tsukuba — into a proper Linux command-line
+VPN client. Each time you ask, it fetches the live list of volunteer-run VPN servers,
+tells you what's reachable right now (with real ping and speed numbers), and connects
+you through OpenVPN with full-tunnel route enforcement and leak-proof DNS.
+
+If you've ever wished for *"just give me a working VPN, in any country, for free"* —
+that's the whole point of this tool.
 
 ```bash
-cd vpnbox-1.0.0-beta1          # extracted release, or this repo dir
-sudo ./install.sh              # deps check + /usr/local/bin/vpn + verify
-sudo ./uninstall.sh            # remove the command
-sudo ./uninstall.sh --purge    # also wipe runtime state files
-rm -rf ~/.cache/vpnbox         # optional: drop server/office caches
+vpn refresh                          # see the world's volunteers as they are now
+vpn countries                        # Japan? Korea? Thailand? — take your pick
+sudo vpn connect --country Japan     # full tunnel, verified, ~15 seconds
 ```
 
-## Daily use
+## Requirements
+
+Linux with OpenVPN 2.5+ and systemd-resolved (any current Ubuntu, Debian, Fedora,
+Arch …), plus Python 3.8+. `install.sh` checks all of this for you:
+
+- **python3** — the app itself
+- **openvpn** — the datamover (vpnbox never reimplements a protocol)
+- **openvpn-systemd-resolved** — so pushed DNS settings actually land on your system
+
+## Install
+
+Grab the release tarball, unpack, install:
 
 ```bash
-vpn refresh         # pull live list + resolve cities (run when list feels stale)
-vpn countries       # what's online right now  (vpn countries --all)
-vpn servers JP      # servers in Japan, with cities/ISP/ping/speed
-vpn status          # connection state + exit IP/location
-vpn ip              # where your traffic appears from today
+tar -xzf vpnbox-1.0.0-beta1.tar.gz
+cd vpnbox-1.0.0-beta1
+sudo ./install.sh            # → /usr/local/bin/vpn, verified with --version
 ```
 
-Connecting needs root (VPN interfaces are a system resource):
+The command is `vpn` from then on. To leave cleanly:
 
 ```bash
-sudo vpn connect                          # best reachable server anywhere
-sudo vpn connect US                       # positional: code or country name
+sudo ./uninstall.sh          # remove the command
+sudo ./uninstall.sh --purge  # also wipe runtime state (/var/log, /run, /var/tmp)
+rm -rf ~/.cache/vpnbox       # optional: drop the server/office caches too
+```
+
+## Your first five minutes
+
+```bash
+vpn refresh                  # fetch the live server list (~15 s) and geolocate it
+vpn countries                # a table of what's out there right now
+vpn servers JP --limit 10    # drill into one country — cities, ISPs, ping, speed
+sudo vpn connect             # or skip browsing entirely: connect to the best server
+vpn status                   # where did my traffic end up? (exit IP + city)
+sudo vpn disconnect          # clean teardown: process, routes, DNS
+```
+
+Connecting needs `sudo` because VPN interfaces, routes and DNS policies are system
+state — this is the one place vpnbox insists on root, and it prints the exact
+command to copy-paste if you forget.
+
+## Everyday connections
+
+Everything that shapes *where* you connect is an option to `vpn connect`:
+
+```bash
+sudo vpn connect US                       # positional shortcut: code or name
 sudo vpn connect --country Japan --city Tokyo
-sudo vpn connect --country US --proto tcp # force a transport
-sudo vpn connect CA --nearest             # country w/o live pool → closest one
-vpn disconnect                            # terminates + cleans up
+sudo vpn connect --country US --proto tcp # pin the transport if you have to
+sudo vpn connect CA                       # no live CA pool? it tells you, and offers:
+sudo vpn connect CA --nearest             # …the closest country that *is* alive
 ```
 
-Platform HQ / area shortcuts ("appear near" Meta, X, WhatsApp, TikTok …):
+You never pick a server by hand unless you want to: after `--country`/`--city`,
+ranking is automatic (more below), and if a volunteer server refuses to handshake
+— they die by the hour — vpnbox fails fast on it and tries the next best
+candidate, up to three times by default (`--max-tries N` to change). Once you've
+browsed with `vpn servers JP`, you can also pin an exact entry with
+`--index 3`, or skip a flaky one with `--skip 1`. When vpnbox lands, it prints
+the exit IP and its city/ISP so you can see exactly where you appear from; if
+that country doesn't match what you asked for, it warns you rather than
+pretending.
+
+## Appear near a platform's office — the fun part
+
+This is vpnbox's signature feature. It knows the worldwide office locations of
+**29 platforms — 239 offices across 31 countries** — so you can ask to *look*
+like you're near one:
 
 ```bash
-vpn sites                       # 29 platforms, 224 offices across 31 countries
-vpn sites --site meta           # ALL Meta offices + nearest live server for each
-vpn sites --site meta --geocode # OSM-precise geocode of Meta's offices (cached)
-vpn sites --recache             # re-geocode every office of every platform
-sudo vpn connect --site meta    # nearest live server to the PRIMARY HQ (Menlo Park)
-sudo vpn connect --site x       # X/Twitter HQ → San Francisco
-sudo vpn connect --site meta --office Seattle    # pick a specific office
-sudo vpn connect --site meta --office all        # nearest to ANY office worldwide
-sudo vpn connect --site line    # Tokyo/Bangkok; kakaotalk=Seoul, telegram=Dubai …
+vpn sites                                 # the whole catalogue, one row per platform
+vpn sites --site meta                     # every Meta office + nearest live server to each
+sudo vpn connect --site meta              # near Meta's primary HQ (Menlo Park, CA)
+sudo vpn connect --site meta --office Seoul
+sudo vpn connect --site meta --office all # nearest to ANY of its 29 offices worldwide
+sudo vpn connect --site line              # LINE: Tokyo/Bangkok; kakaotalk → Seoul; telegram → Dubai
 ```
 
-- `--site X` targets the **primary HQ** (e.g. Meta → Menlo Park, CA).
-- `--office CITY` narrows to any single office (substring match — Dublin,
-  Mumbai, Toronto, …); `--office all` ranks by nearest-any-office.
-- **Accuracy**: office addresses are geocoded via OpenStreetMap Nominatim
-  (◈-precise, cached in `~/.cache/vpnbox/offices.json`); servers carry
-  ip-api lat/lon. Ranking uses distance tiers (≤40/≤150/≤500/≤1500 km) —
-  within a tier, ping/speed/UDP wins — so "near the office" also means
-  "fast and actually alive". Connect triggers a quiet precision pass for
-  the offices in use (first time only).
-- Platforms: meta, instagram, threads, x, whatsapp, google, youtube,
-  microsoft, linkedin, tiktok, snapchat, discord, reddit, pinterest, apple,
-  telegram, signal, tumblr, viber, line, kakaotalk, wechat, netflix, twitch,
-  slack, zoom, quora, spotify, vk.
+A few things worth understanding:
 
-`vpn connect` auto-retries the next best candidates (default 3) if a volunteer
-server refuses to handshake, and prints the exit IP on success so you can confirm
-the country you actually appear from. If the cache is >30 min old it refreshes
-automatically first (the volunteer pool churns fast).
+- **`--site` alone means the primary HQ.** For Meta that's 1601 Willow Road,
+  Menlo Park; for YouTube, 901 Cherry Avenue, San Bruno. Predictable by design.
+- **`--office` picks any other location.** Substring match — `Dublin`, `Mumbai`,
+  `Toronto` — with the list visible via `vpn sites --site <name>`.
+  `--office all` ranks by *nearest to any office anywhere*, which is handy when
+  your region's volunteers are thin.
+- **Addresses are geocoded precisely**, not guessed: on first use vpnbox asks the
+  OpenStreetMap Nominatim service for each office's exact coordinates (one polite
+  request per second, their policy), then caches them forever in
+  `~/.cache/vpnbox/offices.json`. Point the marker `◈` in `vpn sites` output means
+  "OSM-precise"; everything degrades gracefully to city-level coordinates if OSM
+  is unreachable. `vpn sites --recache` re-runs the whole precision pass.
+- **Distance is balanced with reality.** Offices are bucketed into distance
+  tiers around the server (≤40, ≤150, ≤500, ≤1500 km). Within a tier, ping,
+  speed and UDP preference decide — so "4 km from the Bangkok office" is still
+  the *fast alive server near there*, never a close-but-dead one.
 
-## How it works
+**The platforms**: meta, instagram, threads, x, whatsapp, google, youtube,
+microsoft, linkedin, tiktok, snapchat, discord, reddit, pinterest, apple,
+telegram, signal, tumblr, viber, line, kakaotalk, wechat, netflix, twitch,
+slack, zoom, quora, spotify, vk.
 
-- `vpn refresh` downloads the official CSV API of VPN Gate
-  (`https://www.vpngate.net/api/iphone/`), parses the embedded OpenVPN profiles,
-  and enriches the top ~300 servers with city/ISP/lat-lon data via the free
-  ip-api.com batch endpoint. Cache: `~/.cache/vpnbox/servers.json`.
-- `connect` reads `remote`/`proto` from each profile, strips Windows-only
-  directives, appends sane ciphers and (if installed) the
-  `openvpn-systemd-resolved` up/down script so pushed DHCP DNS options land in
-  systemd-resolved, then runs `openvpn --daemon` with PID/log in
-  `/run/vpnbox.pid` / `/var/log/vpnbox.log`.
-- **Full-tunnel enforcement**: vpnbox always appends `redirect-gateway def1`
-  and `block-ipv6` — some volunteer servers forget to push full-tunnel routes;
-  these lines make leaking impossible for IPv4 and disable IPv6 passthrough
-  (delete the `block-ipv6` line in `vpnbox.py` to allow v6).
-- **Success detection is session-scoped**: the daemon log is append-shared, so
-  `wait_ready()` only inspects bytes appended after launch — a stale OK line
-  from a previous session can never fake a successful handshake (this exact
-  bug was caught in live testing on 2026-10-20).
-- UDP servers are preferred in ranking (volunteer TCP relays drop more often).
+One honest note: appearing near an office changes **your exit IP and its
+location** — that's all it can honestly do. It is not a circumvention tool for
+a platform's own server-side policies.
+
+## What's happening under the hood
+
+Worth knowing if you're auditing it — the whole implementation is one readable file:
+
+- `vpn refresh` downloads VPN Gate's official CSV API
+  (`https://www.vpngate.net/api/iphone/`), parses the embedded OpenVPN profiles for
+  every entry, and enriches the strongest ~300 servers with city/ISP/lat-lon
+  geolocation through ip-api.com's free batch endpoint — receiving only cached
+  server addresses, never anything of yours. Cache lives in `~/.cache/vpnbox/servers.json`.
+- On connect, vpnbox builds an OpenVPN config from the winning server's profile:
+  real `remote`/`proto`, Windows-only directives stripped, sane ciphers appended,
+  and the `update-systemd-resolved` up/down script wired in so pushed DNS options
+  are applied through systemd-resolved. The daemon runs with its PID in
+  `/run/vpnbox.pid` and its log in `/var/log/vpnbox.log`.
+- **Full-tunnel enforcement is unconditional:** `redirect-gateway def1` and
+  `block-ipv6` are always appended — some volunteer servers forget to push
+  complete routes, and these two lines make that forgetfulness harmless on IPv4
+  while disabling IPv6 passthrough entirely. (Comfortable with IPv6 leaks? Delete
+  the `block-ipv6` line in `vpnbox.py`.)
+- **Success detection can't be fooled by history:** the daemon log file is shared
+  between sessions, so vpnbox only ever reads bytes *appended after* its own
+  launch. A stale "Initialization Sequence Completed" from yesterday can never
+  count as today's handshake — a bug caught and fixed in live testing on
+  2026-10-20.
+- UDP servers are preferred in ranking; volunteer TCP relays drop out more often.
 
 ## Honest limitations
 
-- **Servers are volunteers**: counts/countries swing over the day (typically a
-  few dozen to a few hundred servers across 10–60 countries; big pools in
-  JP/KR/TH/US). Some restrict or log traffic — the `LogType` field from VPN Gate
-  is stored in the cache (`jq '.servers[] | .log' ~/.cache/vpnbox/servers.json`).
-- Countries appear and disappear with their volunteers. On 2026-10-20: US and
-  PH had live entries (some temporarily unreachable), **CA had none** — when
-  that happens `vpn connect CA` prints the closest live pool and offers
-  `--nearest` to bridge to it. Run `vpn refresh` periodically.
-- **No kill switch**: traffic falls back to your normal connection if OpenVPN
-  dies. If you need one, add a firewall rule (e.g. ufw policy) or consider
-  WireGuard on your own VPS (~$5/mo, a single country, but under your control).
-- City enrichment uses a free third-party geolocation service (ip-api.com);
-  it receives only cached server IPs, not any personal data.
-- Per VPN Gate's terms when you use their list, keep the attribution noted here.
+- **These servers are volunteers.** The map changes every hour: pools in
+  JP/KR/TH/US are usually strong; individual countries appear and disappear with
+  the volunteers behind them. Treat a fresh `vpn refresh` as part of the ritual.
+- **Privacy is the operator's word, not ours.** Each relay decides its logging
+  policy; VPN Gate ships that field and vpnbox stores it
+  (`jq '.servers[] | .log' ~/.cache/vpnbox/servers.json`). Read it before doing
+  anything sensitive.
+- **There is no kill switch.** If OpenVPN dies, your traffic flows out your
+  normal connection. If that matters to you, add a firewall policy (ufw: allow
+  outbound only on `tun0`) — or run your own WireGuard on a rented VPS: one
+  country, but entirely under your control.
+- **A free third-party geolocation service** (ip-api.com) does the city
+  enrichment; if it's slow or absent, server listing still works, just without
+  city names.
+- Per VPN Gate's terms of use, their attribution must travel with any tool that
+  reads their list — it does, in `LICENSE`.
 
-## Debugging a connection (verb 6, foreground)
+## Debugging a connection (the verb-6 recipe)
 
-Verified working debug recipe — shows the full TLS handshake, server PUSH options,
-route installs and DNS script activity:
-
-```python
-# 1) generate a debug config file from the best current server
-python3 - <<'EOF'
-import sys; sys.path.insert(0, '/home/sajad/vpnbox')
-import vpnbox as v
-s = sorted(v.load_cache()['servers'], key=v.rank)
-r = [x for x in s if x['cc']=='JP'][0]
-open('/tmp/vpnbox-debug.ovpn','w',encoding='utf-8').write(v.build_conf(r))
-print(r['host'], r['ip'], r['proto']+'/'+r['port'])
-EOF
-```
+When a connect fails in a way you don't understand, run OpenVPN in the foreground
+with maximum verbosity and read what actually happened — this recipe is the
+session that caught a real server dying mid-test (TLS resets sent, zero replies,
+server had flapped between two runs):
 
 ```bash
-# 2) launch in the foreground and watch /tmp/vpnbox-debug.log
+# 1) build a debug config from the best current pool (from the vpnbox folder)
+python3 - <<'EOF'
+import vpnbox as v
+servers = v.load_cache()['servers']
+pool = [x for x in servers if x['cc'] == 'JP'] or servers
+r = min(pool, key=v.rank)
+open('/tmp/vpnbox-debug.ovpn', 'w').write(v.build_conf(r))
+print(r['host'], r['ip'], f"{r['proto']}/{r['port']}")
+EOF
+
+# 2) run it in the foreground, watch the log, stop after ~15 s
 sudo bash -c 'openvpn --config /tmp/vpnbox-debug.ovpn --verb 6 \
-  > /tmp/vpnbox-debug.log 2>&1 & sleep 14; kill -INT $!'
-grep -aE "Control Channel|PUSH|ARP|Initialization|update-systemd-resolved" /tmp/vpnbox-debug.log
-rm -f /tmp/vpnbox-debug.ovpn /tmp/vpnbox-debug.log   # when done
+  > /tmp/vpnbox-debug.log 2>&1 & sleep 15; kill -INT $!'
+grep -aE "Control Channel|Initialization|PUSH|P_CONTROL|update-systemd-resolved" \
+  /tmp/vpnbox-debug.log
+rm -f /tmp/vpnbox-debug.ovpn /tmp/vpnbox-debug.log
 ```
 
-Reference run on 2026-10-20 (server `vpn537511968`, Tokyo, UDP/7610): TLSv1.3 control
-channel (AES-256-GCM-SHA384, X25519), PUSH: `ifconfig 10.211.x.x`, two DNS options,
-`redirect-gateway def1`, `/1-split routes installed via tun0`, DNS applied with
-`SetLinkDNS(7 …)` → exit IP confirmed as Tokyo. SIGINT then exits code 0.
+A healthy run shows a TLS 1.3 control channel, a `PUSH` block with your address
+and DNS options, the `/1`-split routes entering the table, and
+`update-systemd-resolved` installing DNS on `tun0` — then SIGINT exits cleanly
+with code 0. A run with repeated `P_CONTROL_HARD_RESET_CLIENT_V2` writes and *no
+reads* means the server simply isn't answering; the normal `vpn connect` path
+would have already failed it over to the next candidate.
+
+Peek at any recent native daemon activity any time with
+`tail -40 /var/log/vpnbox.log`.
 
 ## Attribution
 
-Server list by the VPN Gate Academic Experiment / University of Tsukuba.
-vpnbox is a client only; it runs no servers of its own.
+Server list and relay profiles by the **VPN Gate Academic Experiment**,
+University of Tsukuba (<https://vpngate.net>). Geocoding by OpenStreetMap
+contributors via Nominatim, and IP geolocation by ip-api.com. OpenVPN is a
+registered trademark of OpenVPN Inc.; vpnbox invokes it, it is not part of it.
+vpnbox is a client only — it operates no servers of its own.
+
+vpnbox is MIT-licensed; see `LICENSE` for the full text and third-party notices.
