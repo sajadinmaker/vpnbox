@@ -3,6 +3,26 @@
 All notable changes to vpnbox. The first stable will be `1.0.0`; the beta
 cycle uses `1.0.0-beta1`, `1.0.0-beta2`, …
 
+## 1.0.0-beta4 — 2026-10-20
+
+### Added
+- **Arrow-key selection**: ↑/↓ moves a reverse-video highlight over the
+  menu, Enter runs it — over a plain numbered list that anyone can follow
+- One-key shortcuts 1–6 run menu items instantly (plus silent letter
+  aliases r/c/s/d/q for the old habit)
+
+### Changed
+- Intro banner rebuilt from the classic **figlet "slant"** font (typeset
+  with the original FIGlet font file) — proper letterforms, unmistakably
+  readable, still textbook pure ASCII on every terminal
+- Reworded the whole screen in plain English: "your IP / exit IP", "96
+  live servers · 8 countries", "list refreshed 5 min ago" — jargon gone
+- Cancel paths clarified: Enter on any prompt backs out ("back to the
+  menu"), nothing ever leaves you stranded; success/error feedback is ✓
+  green / ✗ red in one status line
+- Static (non-TTY) fallback now shows the same numbered menu with the
+  equivalent commands, so scripts and users see the same mental model
+
 ## 1.0.0-beta3 — 2026-10-20
 
 ### Added

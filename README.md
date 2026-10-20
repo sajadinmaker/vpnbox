@@ -2,7 +2,7 @@
 
 **A free VPN for Linux that needs no account, no key, and no payment.**
 
-v1.0.0-beta3 · 2026-10-20 · one Python file, standard library only
+v1.0.0-beta4 · 2026-10-20 · one Python file, standard library only
 built by **sajad** — <https://github.com/sajadinmaker>
 
 ---
@@ -36,8 +36,8 @@ Arch …), plus Python 3.8+. `install.sh` checks all of this for you:
 Grab the release tarball, unpack, install:
 
 ```bash
-tar -xzf vpnbox-1.0.0-beta3.tar.gz
-cd vpnbox-1.0.0-beta3
+tar -xzf vpnbox-1.0.0-beta4.tar.gz
+cd vpnbox-1.0.0-beta4
 sudo ./install.sh            # → /usr/local/bin/vpn, verified with --version
 ```
 
@@ -69,30 +69,36 @@ command to copy-paste if you forget.
 Run `vpn` with no arguments (or `vpn intro`):
 
 ```
-##   ## #####  ##   ## #####   ####  ##  ##
-##   ## ##  ## ###  ## ##  ## ##  ##  ## #
-##   ## ##  ## ## # ## ##  ## ##  ##   ##
- ## ##  #####  ##  ### #####  ##  ##   ##
- ## ##  ##     ##   ## ##  ## ##  ##  # ##
-  ###   ##     ##   ## #####   ####  ##  ##
-vpnbox 1.0.0-beta3 — free public VPN for Linux · no account · no key
-by sajad — github.com/sajadinmaker
+ _    __      ____       _   __      ____      ____      _  __
+| |  / /     / __ \     / | / /     / __ )    / __ \    | |\ /
+| | / /     / /_/ /    /  |/ /     / __  |   / / / /    |   /
+| |\ /     / ____/    / /|  /     / /_/ /   / /_/ /    /   /
+|___/     /_/        /_/ |_/     /_____/    \____/    /_/|_|
+        vpnbox 1.0.0-beta4 — free public VPN · no account · no key
+              by sajad — github.com/sajadinmaker
 
- │ ● not connected  ·  your IP: 192.140.152.149 · Bengaluru, India
- │ cache : 214 servers · 14 countries · refreshed 5 min ago
+ ┌───────────────────────────────────────────────────────────┐
+ │ ● not connected   your IP: 112.34.5.6  ·  Bengaluru, India│
+ │ 214 live servers · 14 countries · list refreshed 5 min ago│
+ └───────────────────────────────────────────────────────────┘
 
- [R]efresh   [C]onnect   [S]ites   [D]isconnect   [Q]uit
- quick: [1] best server   [2] country / city   [3] near an office
+ ▸ 1  Connect to the fastest server
+   2  Choose a country or city
+   3  Appear near a platform office (Instagram, X, YouTube…)
+   4  Refresh the live server list
+   5  Disconnect
+   6  Quit
+
+ ↑/↓ select · 1–6 quick · Enter run · q quit
 ```
 
-A key-driven shell, built from the same one file with no curses dependency:
-**[R]** refreshes the live list, **[C]** walks you through connecting
-(best-anywhere → country/city → appear-near-an-office), **[S]** browses the
-239 platform offices with each one's nearest live server, **[D]** disconnects,
-**[Q]** leaves. The status panel re-renders after every action, and the
-terminal is always restored to a sane state — including around the sudo
-password prompt. In pipes or CI the bare run degrades gracefully to the
-banner + status + command hints and exits 0.
+Patterned after well-loved TUIs (lazygit, btop, htop): up/down moves the
+highlight, Enter runs it, **1–6 do it instantly**, q leaves, and every
+prompt accepts Enter to bail you out — you can never get stuck. Pressing
+**1** connects to the fastest server in one keystroke; **3** walks you
+through picking a platform and office with plain numbered questions. The
+status panel re-renders after every action, and in pipes or CI the bare
+run degrades gracefully to the banner + numbered command list, exit 0.
 
 ## Everyday connections
 

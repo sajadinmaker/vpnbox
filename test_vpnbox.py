@@ -140,12 +140,12 @@ class Intro(unittest.TestCase):
                  "age": 300, "ip": "203.0.113.9", "city": "Bengaluru",
                  "country": "India"}
 
-    def test_banner_is_pure_ascii_slabs(self):
+    def test_banner_is_pure_ascii(self):
         lines = v.BANNER.splitlines()
         self.assertGreaterEqual(len(lines), 5)
+        self.assertLessEqual(max(len(l) for l in lines), 70)
         self.assertTrue(all(ord(c) < 128 for line in lines for c in line),
                         "banner must be pure ASCII to render everywhere")
-        self.assertIn("#####", "\n".join(lines))
 
     def test_strip_ansi_and_fit_center(self):
         self.assertEqual(v.strip_ansi("\x1b[32mabc\x1b[0m"), "abc")
@@ -156,7 +156,16 @@ class Intro(unittest.TestCase):
 
     def test_intro_key_dispatch_table(self):
         self.assertEqual(sorted(v.INTRO_KEYS),
-                         ["1", "2", "3", "c", "d", "q", "r", "s"])
+                         ["c", "d", "q", "r", "s"])
+        self.assertEqual(v.INTRO_KEYS["r"], 3)     # refresh row index
+        self.assertEqual(v.INTRO_KEYS["q"], 5)     # quit row index
+        self.assertEqual(len(v.INTRO_ACTIONS), 6)
+        self.assertEqual([a[0] for a in v.INTRO_ACTIONS],
+                         ["fastest", "country", "office", "refresh",
+                          "disconnect", "quit"])
+        for _aid, desc, fn in v.INTRO_ACTIONS:
+            self.assertTrue(desc.strip())
+            self.assertTrue(fn is None or callable(fn))
 
     def test_bare_invocation_routes_to_intro(self):
         ap = v.build_parser()
@@ -165,10 +174,16 @@ class Intro(unittest.TestCase):
         self.assertEqual(ap.parse_args(["intro"]).cmd, "intro")
 
     def test_render_is_pure_and_offline_able(self):
-        text = v.intro_render(self.FAKE_SNAP, msg="hi")
-        self.assertIn("not connected", v.strip_ansi(text))
-        self.assertIn("your IP", text)
-        self.assertIn("[R]", v.strip_ansi(text))
+        text = v.intro_render(self.FAKE_SNAP, msg="hi", sel=2)
+        flat = v.strip_ansi(text)
+        self.assertIn("not connected", flat)
+        self.assertIn("your IP", flat)
+        self.assertIn("live servers", flat)
+        self.assertIn("Appear near a platform office", flat)
+        self.assertIn("Enter run", flat)
+        self.assertIn("sajadinmaker", flat)
+        # the selected row carries the selection marker
+        self.assertIn("▸ 3", flat)
 
     def test_static_intro_is_hermetic(self):
         import contextlib
@@ -182,6 +197,9 @@ class Intro(unittest.TestCase):
         self.assertIn(v.APP_VERSION, out)
         self.assertIn("not connected", out)
         self.assertIn("vpn refresh", out)
+        self.assertIn("sudo vpn connect", out)
+        self.assertIn("by sajad", out)
+        self.assertIn("1  connect to the fastest server", out)
 
     def test_snapshot_offline_never_fetches(self):
         with unittest.mock.patch.object(v, "current_geo",
