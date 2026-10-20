@@ -142,10 +142,19 @@ class Intro(unittest.TestCase):
                  "country": "India"}
 
     def test_intro_header_is_minimal(self):
-        # no ASCII banner, no taglines — a letterspaced bold-red title only
+        # no ASCII banner, no taglines — the name lives in a red band drawn
+        # with block glyphs only (mono font, nothing to misrender)
         self.assertNotIn("▁", v.TITLE)
         self.assertNotIn("#", v.TITLE)
         self.assertEqual("".join(v.TITLE.split()), "VPNBOX")
+        block = v.intro_titlebar(100)
+        self.assertEqual(len(block), 5)                 # 5-row band
+        self.assertIn("█", block[0])
+        for glyph in v.INTRO_FONT.values():
+            self.assertEqual(len(glyph), 5)
+            for row in glyph:
+                self.assertTrue(set(row) <= {"█", " "},
+                                f"stray glyph char in font: {row!r}")
 
     def test_read_key_uses_unbuffered_reads(self):
         # regression: sys.stdin.read(1) kept typed-ahead bytes (e.g. '2' +
@@ -202,22 +211,50 @@ class Intro(unittest.TestCase):
         self.assertEqual(between.count("continue"), 2)   # up/down re-render
 
     def test_titlebar_is_big_and_bold(self):
-        for width in (70, 100, 200):
-            bar = v.intro_titlebar(width)
-            self.assertIn("V", v.strip_ansi(bar))
-            # a roomy bar (48+ visible chars) — reads as a bold name strip
-            self.assertGreaterEqual(len(v.strip_ansi(bar)), 46)
-            # never wider than the terminal
-            self.assertLessEqual(len(v.strip_ansi(bar)), width - 10)
+        # a red-themed box: 5 rows of big mono block letters at every sane
+        # width, double-wide cells on very wide screens — never overflowing
+        for width in (60, 80, 92):
+            lines = v.intro_titlebar(width)
+            self.assertEqual(len(lines), 5)
+            band = len(v.strip_ansi(lines[0]))
+            self.assertGreaterEqual(band, 40)
+            self.assertLessEqual(band, width - 6)
+        wide = v.intro_titlebar(120)
+        self.assertEqual(len(wide), 5)
+        self.assertGreater(len(v.strip_ansi(wide[0])),
+                           len(v.strip_ansi(v.intro_titlebar(80)[0])),
+                           "very wide terminals must get BIGGER letters")
+        for width in (38, 41):                       # too narrow for blocks
+            lines = v.intro_titlebar(width)
+            self.assertEqual(len(lines), 1)
+            self.assertIn("V", v.strip_ansi(lines[0]))
+        with unittest.mock.patch.dict(os.environ, {"VPNBOX_PLAIN": "1"}):
+            lines = v.intro_titlebar(120)
+            self.assertEqual(len(lines), 1)
+            self.assertIn("V", v.strip_ansi(lines[0]))
 
     def test_render_fits_any_terminal_width(self):
         import re
-        for width in (64, 80, 110, 160):
+        for width in (46, 64, 80, 110, 120, 160):
             with unittest.mock.patch.object(v, "tty_width", return_value=width):
                 text = v.intro_render(self.FAKE_SNAP, sel=0)
             vis = max(len(l) for l in text.splitlines())
             self.assertLessEqual(vis, width,
                                  f"line overflows a {width}-col terminal")
+
+    def test_status_panel_rewraps_with_the_screen(self):
+        # responsive: narrow screens must stack the status facts, wide ones
+        # may keep them on one row — no information, no overflow either way
+        fact = "Bengaluru, India · 96 live servers · 8 countries · list refreshed 5 min ago"
+        narrow = v.intro_status_rows(self.FAKE_SNAP, limit=32)
+        joined = " ".join(narrow)
+        self.assertIn("Bengaluru", joined)
+        self.assertIn("96 live servers", joined)
+        self.assertTrue(all(len(f) <= 32 for f in narrow[1:]),
+                        narrow)
+        wide = v.intro_status_rows(self.FAKE_SNAP, limit=200)
+        self.assertEqual(len(wide), 2)             # state + all facts, one row
+        self.assertIn("list refreshed 5 min ago", wide[1])
 
     def test_strip_ansi_and_fit_center(self):
         self.assertEqual(v.strip_ansi("\x1b[32mabc\x1b[0m"), "abc")
@@ -274,7 +311,7 @@ class Intro(unittest.TestCase):
         self.assertIn("not connected", out)
         self.assertIn("vpn refresh", out)
         self.assertIn("sudo vpn connect", out)
-        self.assertIn("by sajad", out)
+        self.assertIn(f"by {v.AUTHOR}", out)
         self.assertIn("1  connect to the fastest server", out)
 
     def test_snapshot_offline_never_fetches(self):

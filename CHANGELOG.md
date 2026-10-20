@@ -28,9 +28,18 @@ cycle uses `1.0.0-beta1`, `1.0.0-beta2`, …
   can no longer be answered by the terminal's own `tcflush` no-op either
 - Dialogs are read through a raw-mode line reader with live echo (backspace
   works, caret visible), replacing cooked `input()`
-- App name rendered as a **big bold white-on-red bar** that scales to the
-  terminal, with the throttled rule and credit line beneath — menus stay
-  centered and fit 64–110 col terminals responsively
+- **The name is drawn, not typed**: a big red-themed box with `VPNBOX` in
+  huge mono block letters (5 rows, bold white on solid red); on very wide
+  terminals the letter cells double in width for an even bigger name, and
+  narrow screens / `VPNBOX_PLAIN=1` fall back to a bold letterspaced strip
+- **Fully responsive UI for every screen**: the layout adapts from 46 to
+  120 columns — the status panel re-wraps its facts into stacked rows on
+  narrow terminals, menu labels drop their long parenthetical hint, and
+  the credit line trims its URL when the width demands it (wide screens
+  get everything, never an overflow)
+- Human list age: "5 min ago"/"2 h ago" instead of raw seconds
+- Credit everywhere now names the full handle: **by sajadinmaker —
+  github.com/sajadinmaker** (also in the LICENSE copyright)
 - Version naming simplified to plain `1.0.0-beta` (the beta cycle's
   numbered tags v1.0.0-beta1…beta4 stay published on GitHub)
 

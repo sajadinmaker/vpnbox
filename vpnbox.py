@@ -1357,17 +1357,65 @@ def cmd_sites(args):
 # interactive intro — bare `vpn` / `vpn intro`; pure ANSI + stdlib, no curses
 # ----------------------------------------------------------------------------
 
-TITLE = "   ".join("VPNBOX")       # letterspaced; rendered as a bold red bar
+INTRO_NAME = "VPNBOX"
+TITLE = "   ".join(INTRO_NAME)       # plain letterspaced strip (fallback)
+AUTHOR = "sajadinmaker"             # credit everywhere: by AUTHOR
 
 _PROMPT_SOAK = 0.35   # seconds a dialog ignores typed-ahead keystrokes
 
+# huge mono block letters — the name is drawn, not typed (5 rows per glyph)
+INTRO_FONT = {
+    "V": ["█   █", "█   █", "█   █", " █ █ ", "  █  "],
+    "P": ["███ ", "█  █", "███ ", "█   ", "█   "],
+    "N": ["█   █", "██  █", "█ █ █", "█  ██", "█   █"],
+    "B": ["███ ", "█  █", "███ ", "█  █", "███ "],
+    "O": ["████", "█  █", "█  █", "█  █", "████"],
+    "X": ["█   █", " █ █ ", "  █  ", " █ █ ", "█   █"],
+}
+
+
+def _zoom(s, n):
+    """scale glyph cells horizontally n times so wide screens get bigger."""
+    return "".join(c * n for c in s)
+
+
+def _block_lines(name=INTRO_NAME, zoom=1):
+    """assemble the glyph rows: letters joined by gaps, optionally zoomed."""
+    font = INTRO_FONT
+    gap = "  " if zoom > 1 else " "
+    rows = []
+    for i in range(len(next(iter(font.values())))):
+        parts = [_zoom(font[c][i], zoom) if zoom > 1 else font[c][i]
+                 for c in name]
+        rows.append(gap.join(parts))
+    return rows
+
+
+def _utf_render_ok():
+    try:
+        return "utf" in (sys.stdout.encoding or "").lower()
+    except Exception:
+        return False
+
+
+def _red_band(rows_text, width):
+    """paint rows as one solid red band, centred, bounded by the terminal."""
+    inner = min(max(len(strip_ansi(r)) for r in rows_text) + 12, width - 6)
+    return [paint(r.center(inner), "1;37;41") for r in rows_text]
+
 
 def intro_titlebar(width=80):
-    """big & bold app name: white-on-red reverse strip, scales to terminal."""
+    """the name as a BIG red-themed box: solid mono block letters on a red
+    band; double-wide cells on very wide terminals; falls back to a bold
+    letterspaced strip on narrow/(VPNBOX_PLAIN=1)/non-UTF terminals."""
+    plain = (os.environ.get("VPNBOX_PLAIN") == "1" or not _utf_render_ok())
+    if not plain and width >= 42:
+        zoom = 2 if width >= 94 else 1
+        return _red_band(_block_lines(INTRO_NAME, zoom=zoom), width)
     bar_w = min(max(len(TITLE) + 24, 48), max(26, width - 10))
     pad = (bar_w - len(TITLE)) // 2
     inner = " " * pad + TITLE + " " * (bar_w - pad - len(TITLE))
-    return paint(inner, "1;37;41")     # bold white on red background
+    return [paint(inner, "1;37;41")]     # bold white on red background
 
 # ordered most-common-first (lazygit/k9s pattern: numeric keys jump straight
 # to an action from anywhere on the screen; letters stay as secret aliases)
@@ -1511,9 +1559,13 @@ def _boxed(rows):
     return box
 
 
-def intro_action_rows(sel):
+def intro_action_rows(sel, limit=70):
     rows = []
     for i, (_aid, desc, _fn) in enumerate(INTRO_ACTIONS):
+        if len(desc) + 4 > limit:            # responsive: tight terminals get
+            desc = desc.split(" (")[0]       # the short form, never overflow
+        if len(desc) + 4 > limit:
+            desc = desc[:limit - 5] + "…"
         mark = red("▸") if i == sel else " "
         num = paint(f"{i + 1}", "1;31")
         row = f"{mark} {num}  {desc}"
@@ -1522,35 +1574,58 @@ def intro_action_rows(sel):
     return [r + " " * (pad - len(strip_ansi(r))) for r in rows]
 
 
-def intro_render(s, msg="", sel=0):
-    w = max(64, min(tty_width(), 100))
-    out = [fit_center(intro_titlebar(w), w),        # big bold red name
-           fit_center(paint("─" * min(60, max(20, w - 12)), "31"), w),
-           fit_center(dim(f"{APP} {APP_VERSION}"
-                          " · by sajad — github.com/sajadinmaker"), w),
-           ""]
-    # status line (btop style: header panel, human words, no jargon)
-    state = green("● connected") if s["connected"] else red("○ not connected")
-    where = "unknown — no internet?"
-    if s["ip"]:
-        extra = ", ".join(x for x in (s["city"], s["country"]) if x)
-        where = s["ip"] + (f"  ·  {extra}" if extra else "")
-    label = "exit IP" if s["connected"] else "your IP"
-    if s["servers"]:
-        if s["age"] < 15:
-            age = "just now"
-        elif s["age"] < 3600:
-            age = f"{s['age']} s ago"
+def _wrap_pieces(pieces, limit):
+    """greedy wrap of plain-text facts into rows no wider than limit."""
+    rows, cur = [], ""
+    for p in pieces:
+        cand = cur + " · " + p if cur else p
+        if len(cand) <= limit or not cur:
+            cur = cand
         else:
-            age = f"{s['age'] // 60} min ago"
-        line2 = (f"{s['servers']} live servers · {s['countries']} countries · "
-                 f"list refreshed {age}")
+            rows.append(cur)
+            cur = p[:limit - 1] + "…" if len(p) > limit else p
+    if cur:
+        rows.append(cur)
+    return rows
+
+
+def intro_status_rows(s, limit=70):
+    """human status facts, re-wrapped to fit any terminal width."""
+    state = green("● connected") if s["connected"] else red("○ not connected")
+    label = "exit IP" if s["connected"] else "your IP"
+    rows = [state + "   " + (f"{label}: {s['ip']}" if s["ip"]
+                             else "offline — no internet?")]
+    pieces = []
+    if s["ip"] and (s["city"] or s["country"]):
+        pieces.append(", ".join(x for x in (s["city"], s["country"]) if x))
+    if s["servers"]:
+        pieces.append(f"{s['servers']} live servers · "
+                      f"{s['countries']} countries")
+        if s["age"] is not None:
+            if s["age"] < 15:
+                age = "just now"
+            elif s["age"] < 3600:
+                age = f"{max(1, s['age'] // 60)} min ago"
+            else:
+                age = f"{s['age'] // 3600} h ago"
+            pieces.append(f"list refreshed {age}")
     else:
-        line2 = "no server list yet — pick 4 below to refresh"
-    out += [fit_center(l, w) for l in _boxed([f"{state}   {label}: {where}",
-                                              line2])]
+        pieces.append("no server list yet — pick 4 to refresh")
+    return rows + _wrap_pieces(pieces, limit)
+
+
+def intro_render(s, msg="", sel=0):
+    w = max(46, min(tty_width(), 120))
+    out = [fit_center(l, w) for l in intro_titlebar(w)]   # big red name box
+    out.append(fit_center(paint("─" * min(60, max(18, w - 12)), "31"), w))
+    credit = f"by {AUTHOR} — github.com/{AUTHOR}"
+    if len(f"{APP} {APP_VERSION} · {credit}") > w - 2:
+        credit = f"by {AUTHOR}"
+    out.append(fit_center(dim(f"{APP} {APP_VERSION} · {credit}"), w))
     out.append("")
-    out += [fit_center(r, w) for r in intro_action_rows(sel)]
+    out += [fit_center(l, w) for l in _boxed(intro_status_rows(s, w - 8))]
+    out.append("")
+    out += [fit_center(r, w) for r in intro_action_rows(sel, w - 10)]
     if msg:
         tone = yellow
         if msg.startswith("✓"):
@@ -1565,8 +1640,9 @@ def intro_render(s, msg="", sel=0):
 
 def intro_static():
     """non-TTY path (pipes, CI): title + status + numbered menu, exit 0."""
-    print(intro_titlebar(80))
-    print(dim("by sajad — github.com/sajadinmaker"))
+    for ln in intro_titlebar(80):
+        print(ln)
+    print(dim(f"by {AUTHOR} — github.com/{AUTHOR}"))
     print()
     s = intro_snapshot(fetch=False)
     state = "● connected" if s["connected"] else "○ not connected"

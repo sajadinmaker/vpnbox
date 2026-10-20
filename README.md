@@ -3,7 +3,7 @@
 **A free VPN for Linux that needs no account, no key, and no payment.**
 
 v1.0.0-beta · 2026-10-20 · one Python file, standard library only
-built by **sajad** — <https://github.com/sajadinmaker>
+built by **sajadinmaker** — <https://github.com/sajadinmaker>
 
 ---
 
@@ -69,14 +69,19 @@ command to copy-paste if you forget.
 Run `vpn` with no arguments (or `vpn intro`):
 
 ```
-  [            V   P   N   B   O   X            ]   ← bold white on a red bar
+  █   █ ███  █   █ ███  ████ █   █   ← the name drawn in big mono
+  █   █ █  █ ██  █ █  █ █  █  █ █      block letters inside a red band
+  █   █ ███  █ █ █ ███  █  █    █     (5 rows, bold white on solid red;
+   █ █  █    █  ██ █  █ █  █  █ █      double-wide on very wide screens)
+    █   █    █   █ ███  ████ █   █
   ────────────────────────────────────────────────
-  vpnbox 1.0.0-beta · by sajad — github.com/sajadinmaker
+  vpnbox 1.0.0-beta · by sajadinmaker — github.com/sajadinmaker
 
- ┌───────────────────────────────────────────────────────────┐
- │ ● not connected   your IP: 112.34.5.6  ·  Bengaluru, India│
- │ 214 live servers · 14 countries · list refreshed 5 min ago│
- └───────────────────────────────────────────────────────────┘
+  ┌───────────────────────────────────────────────────────────┐
+  │ ● not connected   your IP: 112.34.5.6                     │
+  │ Bengaluru, India · 214 live servers · 14 countries        │
+  │ list refreshed 5 min ago                                  │
+  └───────────────────────────────────────────────────────────┘
 
    1  Connect to the fastest server
    2  Choose a country or city
@@ -85,12 +90,17 @@ Run `vpn` with no arguments (or `vpn intro`):
    5  Disconnect
    6  Quit
 
- ↑/↓ select · 1–6 quick · Enter run · q quit
-```
+  ↑/↓ select · 1–6 quick · Enter run · q quit
+`````````
 
-Everything is on a clean red-accented screen — a big bold white-on-red
-**VPNBOX** name bar that scales to your terminal, a throttled red rule, and
-a red-bordered live status panel; no ASCII art, no slogans. Patterned
+Everything is on a clean red-accented screen — the **VPNBOX** name is
+*drawn* as huge mono block letters inside a solid red band (5 rows; on
+very wide terminals the letter cells double in width; `VPNBOX_PLAIN=1`
+falls back to a bold letterspaced strip), followed by a throttled red
+rule and a red-bordered live status panel; no ASCII art, no slogans.
+The whole UI is responsive from 46 to 120 columns: narrow screens stack
+the status facts instead of overflowing, and menu labels shorten to fit.
+Patterned
 after well-loved TUIs (lazygit, btop, htop): up/down moves the highlight,
 Enter runs it, **1–6 do it instantly**, q leaves. Dialogs follow the same
 rule everywhere: **Enter commits the forward choice** (the top pool, the
