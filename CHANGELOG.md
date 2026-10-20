@@ -3,6 +3,31 @@
 All notable changes to vpnbox. Versioning: semver, pre-releases as
 `1.0.0-betaN` until the first stable.
 
+## 1.0.0-beta2 — 2026-10-20
+
+Maintenance & engineering-base release — no protocol changes.
+
+### Added
+- Hermetic unit-test suite (12 tests: site-database integrity, geography,
+  ranking, office-tier targeting, full-tunnel config enforcement, version
+  consistency) — `make test`
+- CI on every push / PR across Python 3.9 → 3.13
+- Tag-triggered release automation: pushing `vX.Y.Z` builds the tarball,
+  checksums it, and publishes it to GitHub Releases — no manual steps
+- `Makefile` (check / test / dist / clean), `CONTRIBUTING.md` (design rules +
+  release checklist), `.editorconfig`, `.gitattributes`, repo topics
+- `vpn --version` flag; `APP_VERSION` in vpnbox.py is the single source of
+  truth (enforced by tests + release workflow)
+
+### Changed
+- README fully rewritten for readability — accurate flags (`--max-tries`,
+  `--index`, `--skip`), generic verb-6 debug recipe, honest limits section
+- HTTP User-Agent headers now carry APP_VERSION
+
+### Fixed
+- install.sh: creates `$PREFIX/bin` before installing; replaces stale
+  dev-symlink installs instead of aborting with "same file" error
+
 ## 1.0.0-beta1 — 2026-10-20
 
 First public beta. Single-file Python 3 CLI (`vpnbox.py`), stdlib-only,

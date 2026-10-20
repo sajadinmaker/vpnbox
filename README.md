@@ -2,7 +2,7 @@
 
 **A free VPN for Linux that needs no account, no key, and no payment.**
 
-v1.0.0-beta1 · 2026-10-20 · one Python file, standard library only
+v1.0.0-beta2 · 2026-10-20 · one Python file, standard library only
 
 ---
 
@@ -35,8 +35,8 @@ Arch …), plus Python 3.8+. `install.sh` checks all of this for you:
 Grab the release tarball, unpack, install:
 
 ```bash
-tar -xzf vpnbox-1.0.0-beta1.tar.gz
-cd vpnbox-1.0.0-beta1
+tar -xzf vpnbox-1.0.0-beta2.tar.gz
+cd vpnbox-1.0.0-beta2
 sudo ./install.sh            # → /usr/local/bin/vpn, verified with --version
 ```
 
