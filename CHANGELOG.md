@@ -3,6 +3,25 @@
 All notable changes to vpnbox. The first stable will be `1.0.0`; the beta
 cycle uses `1.0.0-beta1`, `1.0.0-beta2`, …
 
+## 1.0.0-beta2 — 2026-10-20
+
+### Added
+- **Interactive intro session**: bare `vpn` (or explicit `vpn intro`) opens a
+  full-screen experience — VPNBOX ASCII banner, live status panel
+  (connection state, your IP + city, cache age) and a key-driven shell:
+  `[R]` refresh · `[C]` connect wizard (best-anywhere / country+city /
+  appear-near-a-platform-office) · `[S]` sites browser with each office's
+  nearest live server · `[D]` disconnect · `[Q]` quit
+- Implemented in pure ANSI + termios — stdlib-only rule preserved (no
+  curses); terminal state is always restored, sudo prompts unaffected;
+  arrows and Esc work
+- Graceful fallback: when stdout isn't a real terminal (pipes, CI,
+  `NO_COLOR`), the bare run prints the banner + status + command hints and
+  exits 0 — scripts and pipelines never hang
+- CI smoke now exercises the bare-invocation path
+- `exit` codes unchanged; every existing command and flag behaves exactly
+  as before
+
 ## 1.0.0-beta1 — 2026-10-20
 
 First public release. Single-file Python 3 application (`vpnbox.py`),

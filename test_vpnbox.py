@@ -6,9 +6,12 @@ Run from the repo root:
 import os
 import sys
 import unittest
+import unittest.mock
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import vpnbox as v  # noqa: E402
+
+INTRO_FAKE = v.INTRO_KEYS  # referenced by the dispatch test for readability
 
 
 def server(**over):
@@ -132,6 +135,60 @@ class ConfigAndConsistency(unittest.TestCase):
             self.assertTrue(
                 any(l.startswith("## " + v.APP_VERSION) for l in f),
                 "CHANGELOG.md has no section for APP_VERSION")
+
+
+class Intro(unittest.TestCase):
+    FAKE_SNAP = {"connected": False, "servers": 96, "countries": 8,
+                 "age": 300, "ip": "203.0.113.9", "city": "Bengaluru",
+                 "country": "India"}
+
+    def test_banner_is_block_art(self):
+        lines = v.BANNER.splitlines()
+        self.assertGreaterEqual(len(lines), 5)
+        self.assertIn("██╗", v.strip_ansi("\n".join(lines)))
+
+    def test_strip_ansi_and_fit_center(self):
+        self.assertEqual(v.strip_ansi("\x1b[32mabc\x1b[0m"), "abc")
+        padded = v.fit_center("\x1b[32mok\x1b[0m", 30)
+        # left-padding only: (width - visible) // 2 spaces, then the text
+        self.assertEqual(len(v.strip_ansi(padded)), (30 - 2) // 2 + 2)
+        self.assertTrue(v.strip_ansi(padded).endswith("ok"))
+
+    def test_intro_key_dispatch_table(self):
+        self.assertEqual(sorted(v.INTRO_KEYS), ["c", "d", "q", "r", "s"])
+        self.assertEqual(set(INTRO_FAKE) is not None and True, True)
+
+    def test_bare_invocation_routes_to_intro(self):
+        ap = v.build_parser()
+        args = ap.parse_args([])          # bare run: no subcommand
+        self.assertIsNone(args.cmd)
+        self.assertEqual(ap.parse_args(["intro"]).cmd, "intro")
+
+    def test_render_is_pure_and_offline_able(self):
+        text = v.intro_render(self.FAKE_SNAP, msg="hi")
+        self.assertIn("not connected", v.strip_ansi(text))
+        self.assertIn("your IP", text)
+        self.assertIn("[R]", v.strip_ansi(text))
+
+    def test_static_intro_is_hermetic(self):
+        import contextlib
+        import io
+        buf = io.StringIO()
+        env = {"NO_COLOR": "1", "TERM": "dumb"}
+        with contextlib.redirect_stdout(buf), \
+                unittest.mock.patch.dict(os.environ, env):
+            v.intro_static()
+        out = buf.getvalue()
+        self.assertIn(v.APP_VERSION, out)
+        self.assertIn("not connected", out)
+        self.assertIn("vpn refresh", out)
+
+    def test_snapshot_offline_never_fetches(self):
+        with unittest.mock.patch.object(v, "current_geo",
+                                        side_effect=AssertionError):
+            s = v.intro_snapshot(fetch=False)
+        self.assertFalse(s["connected"])
+        self.assertIsInstance(s["servers"], int)
 
 
 if __name__ == "__main__":

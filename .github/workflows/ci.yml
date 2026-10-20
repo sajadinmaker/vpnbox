@@ -29,6 +29,7 @@ jobs:
         run: |
           python3 vpnbox.py --version
           python3 vpnbox.py --help > /dev/null
+          python3 vpnbox.py > /dev/null      # bare run → static intro, exits 0
           python3 vpnbox.py sites > /dev/null
 
       - name: Unit tests

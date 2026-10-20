@@ -2,7 +2,7 @@
 
 **A free VPN for Linux that needs no account, no key, and no payment.**
 
-v1.0.0-beta1 · 2026-10-20 · one Python file, standard library only
+v1.0.0-beta2 · 2026-10-20 · one Python file, standard library only
 
 ---
 
@@ -35,8 +35,8 @@ Arch …), plus Python 3.8+. `install.sh` checks all of this for you:
 Grab the release tarball, unpack, install:
 
 ```bash
-tar -xzf vpnbox-1.0.0-beta1.tar.gz
-cd vpnbox-1.0.0-beta1
+tar -xzf vpnbox-1.0.0-beta2.tar.gz
+cd vpnbox-1.0.0-beta2
 sudo ./install.sh            # → /usr/local/bin/vpn, verified with --version
 ```
 
@@ -62,6 +62,34 @@ sudo vpn disconnect          # clean teardown: process, routes, DNS
 Connecting needs `sudo` because VPN interfaces, routes and DNS policies are system
 state — this is the one place vpnbox insists on root, and it prints the exact
 command to copy-paste if you forget.
+
+## Open it like an app
+
+Run `vpn` with no arguments (or `vpn intro`):
+
+```
+██╗   ██╗██████╗ ███╗   ██╗██████╗  ██████╗ ██╗  ██╗
+██║   ██║██╔══██╗████╗  ██║██╔══██╗██╔═══██╗██║ ██╔╝
+██║   ██║██████╔╝██╔██╗ ██║██████╔╝██║   ██║█████╔╝
+╚██╗ ██╔╝██╔═══╝ ██║╚██╗██║██╔══██╗██║   ██║██╔═██╗
+ ╚████╔╝ ██║     ██║ ╚████║██║  ██║╚██████╔╝██║  ██╗
+  ╚═══╝  ╚═╝     ╚═╝  ╚═══╝╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═╝
+vpnbox 1.0.0-beta2 — free public VPN for Linux · no account · no key
+
+ │ ● not connected  ·  your IP: 192.140.152.149 · Bengaluru, India
+ │ cache : 214 servers · 14 countries · refreshed 5 min ago
+
+ [R]efresh   [C]onnect   [S]ites   [D]isconnect   [Q]uit
+```
+
+A key-driven shell, built from the same one file with no curses dependency:
+**[R]** refreshes the live list, **[C]** walks you through connecting
+(best-anywhere → country/city → appear-near-an-office), **[S]** browses the
+239 platform offices with each one's nearest live server, **[D]** disconnects,
+**[Q]** leaves. The status panel re-renders after every action, and the
+terminal is always restored to a sane state — including around the sudo
+password prompt. In pipes or CI the bare run degrades gracefully to the
+banner + status + command hints and exits 0.
 
 ## Everyday connections
 

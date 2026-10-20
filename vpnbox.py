@@ -47,7 +47,7 @@ import urllib.parse
 import urllib.request
 
 APP = "vpnbox"
-APP_VERSION = "1.0.0-beta1"
+APP_VERSION = "1.0.0-beta2"
 UA = f"{APP}/{APP_VERSION} (linux; free public VPN client)"
 PID_FILE = "/run/vpnbox.pid"
 LOG_FILE = "/var/log/vpnbox.log"
@@ -1351,17 +1351,385 @@ def cmd_sites(args):
 # parser
 # ----------------------------------------------------------------------------
 
-def main():
+# ----------------------------------------------------------------------------
+# interactive intro — bare `vpn` / `vpn intro`; pure ANSI + stdlib, no curses
+# ----------------------------------------------------------------------------
+
+BANNER = """\
+██╗   ██╗██████╗ ███╗   ██╗██████╗  ██████╗ ██╗  ██╗
+██║   ██║██╔══██╗████╗  ██║██╔══██╗██╔═══██╗██║ ██╔╝
+██║   ██║██████╔╝██╔██╗ ██║██████╔╝██║   ██║█████╔╝
+╚██╗ ██╔╝██╔═══╝ ██║╚██╗██║██╔══██╗██║   ██║██╔═██╗
+ ╚████╔╝ ██║     ██║ ╚████║██║  ██║╚██████╔╝██║  ██╗
+  ╚═══╝  ╚═╝     ╚═╝  ╚═══╝╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═╝"""
+
+INTRO_KEYS = {
+    "r": "refresh", "c": "connect", "s": "sites",
+    "d": "disconnect", "q": "quit",
+}
+
+
+def strip_ansi(s):
+    return re.sub(r"\x1b\[[0-9;]*m", "", s)
+
+
+def tty_width(default=90):
+    try:
+        cols = os.get_terminal_size(sys.stdout.fileno()).columns
+        return cols if cols >= 20 else default
+    except (OSError, ValueError, AttributeError):
+        return default
+
+
+def fit_center(line, width=None):
+    if width is None:
+        width = tty_width()
+    vis = len(strip_ansi(line))
+    return " " * max(0, (width - vis) // 2) + line
+
+
+def ansi_ok():
+    """true only when a full-screen UI makes sense: real TTY + colors allowed."""
+    if os.environ.get("NO_COLOR") or os.environ.get("TERM") in ("", "dumb"):
+        return False
+    return sys.stdin.isatty() and sys.stdout.isatty()
+
+
+def read_key():
+    """one keypress → letter/number (lower), 'enter', 'up', 'down', 'esc'.
+
+    Terminal raw mode is always restored before returning (sudo prompts and
+    KeyboardInterrupt inside the UI therefore behave normally)."""
+    import select
+    import termios
+    import tty
+
+    fd = sys.stdin.fileno()
+    old = termios.tcgetattr(fd)
+    try:
+        tty.setraw(fd)
+        ch = sys.stdin.read(1)
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old)
+    if ch == "\x1b":
+        if select.select([sys.stdin], [], [], 0.05)[0]:
+            try:
+                seq = sys.stdin.read(2)
+            except OSError:
+                seq = ""
+            if seq == "[A":
+                return "up"
+            if seq == "[B":
+                return "down"
+            return "esc"
+        return "esc"
+    if ch in ("\r", "\n"):
+        return "enter"
+    if ch == "\x03":          # Ctrl-C arrives as a plain char in raw mode
+        return "q"
+    return ch.lower()
+
+
+_GEO_MEMO = {"t": 0.0, "g": None}
+
+
+def current_geo(ttl=30):
+    """current-route geolocation, memoized so keypresses never block the UI."""
+    now = time.time()
+    if now - _GEO_MEMO["t"] > ttl:
+        try:
+            _GEO_MEMO["g"] = fetch_geo()
+        except Exception:
+            _GEO_MEMO["g"] = None
+        _GEO_MEMO["t"] = now
+    return _GEO_MEMO["g"]
+
+
+def intro_snapshot(fetch=True):
+    s = {"connected": bool(running_pid()), "servers": 0, "countries": 0,
+         "age": None, "ip": None, "city": "", "country": ""}
+    cache = load_cache()
+    if cache:
+        servers = cache.get("servers") or []
+        s["servers"] = len(servers)
+        s["countries"] = len({r["cc"] for r in servers})
+        s["age"] = max(0, round(time.time() - cache.get("updated", 0)))
+    if fetch:
+        g = current_geo()
+        if g:
+            s["ip"] = g.get("query")
+            s["city"] = g.get("city") or ""
+            s["country"] = g.get("country") or ""
+    return s
+
+
+def _boxed(rows):
+    w = max((len(strip_ansi(r)) for r in rows), default=0)
+    box = [cyan("┌" + "─" * (w + 2) + "┐")]
+    for r in rows:
+        box.append(cyan("│ ") + r + " " * (w - len(strip_ansi(r))) + cyan(" │"))
+    box.append(cyan("└" + "─" * (w + 2) + "┘"))
+    return box
+
+
+def intro_menu():
+    return "   ".join(bold(f"[{k[0]}]") + k[1] for k in
+                   zip("RCSDQ", ("refresh", "connect", "ites",
+                                 "disconnect", "uit")))
+
+
+def intro_render(s, msg=""):
+    w = max(64, min(tty_width(), 100))
+    out = [fit_center(cyan(line), w) for line in BANNER.splitlines()]
+    out.append(fit_center(f"{APP} {APP_VERSION} — free public VPN for Linux · "
+                          "no account · no key", w))
+    out.append(fit_center("data: VPN Gate (vpngate.net) · geocode: "
+                          "OpenStreetMap · ip-api", w))
+    out.append("")
+    state = green("● CONNECTED") if s["connected"] else red("○ not connected")
+    loc = "unknown (offline?)"
+    if s["ip"]:
+        loc = s["ip"]
+        extra = ", ".join(x for x in (s["city"], s["country"]) if x)
+        if extra:
+            loc += f"  ·  {extra}"
+    tag = "exit IP" if s["connected"] else "your IP"
+    if s["servers"] == 0:
+        cache = "empty — press [R] to refresh"
+    else:
+        age = (f"{s['age']} s ago" if s["age"] < 60
+               else f"{s['age'] // 60} min ago")
+        cache = f"{s['servers']} servers · {s['countries']} countries · " \
+                f"refreshed {age}"
+    box = _boxed([state, f"{tag}: {loc}", f"cache : {cache}"])
+    out += [fit_center(b, w) for b in box]
+    if msg:
+        out.append("")
+        out.append(fit_center(yellow(msg), w))
+    out.append("")
+    out.append(fit_center(intro_menu(), w))
+    out.append(fit_center("type a letter · esc/q leaves · e.g. vpn connect "
+                          "--site instagram --office Tokyo", w))
+    return "\n".join(out)
+
+
+def intro_static():
+    """non-TTY path (pipes, CI): banner + status, no keypress loop, exit 0."""
+    for line in BANNER.splitlines():
+        print(line)
+    print(f"{APP} {APP_VERSION} — free public VPN for Linux over VPN Gate "
+          "(vpngate.net)")
+    s = intro_snapshot(fetch=False)
+    state = "connected" if s["connected"] else "not connected"
+    if s["servers"] == 0:
+        cache = "no cache yet — run: vpn refresh"
+    else:
+        cache = (f"{s['servers']} servers / {s['countries']} countries")
+    print(f"status: {state} · cache: {cache}")
+    print()
+    print("the interactive screen needs a real terminal — open it with:  vpn")
+    print("or use the commands directly:")
+    print("  vpn refresh | vpn countries | vpn servers JP | vpn sites")
+    print("  sudo vpn connect --site instagram --office Tokyo")
+    print("  sudo vpn disconnect | vpn status")
+
+
+def run_in_ui(argv):
+    """run a (possibly sudo) command with live output; return its exit code.
+
+    The cursor is restored so sudo password prompts render normally."""
+    print("\x1b[?25h", end="", flush=True)
+    print()
+    try:
+        rc = subprocess.run(argv).returncode
+    except KeyboardInterrupt:
+        rc = 130
+    _GEO_MEMO["t"] = 0.0            # the exit route may just have changed
+    return rc
+
+
+def _ask(prompt, default=""):
+    try:
+        a = input(prompt).strip()
+    except (EOFError, KeyboardInterrupt):
+        print()
+        return None
+    return a or default
+
+
+def _pick_site():
+    sites = sorted(SITES)
+    print(bold("appear near a platform office") + f"  ({sum(len(s['offices']) for s in SITES.values())} offices)")
+    for i, name in enumerate(sites, 1):
+        print(f" {i:2}) {clip(name, 14):<14} {clip(SITES[name]['label'], 36):<36} "
+              f"HQ: {clip(SITES[name]['offices'][0][1], 24)}")
+    pick = _ask("site (number or name) [Enter = cancel]: ")
+    if pick is None or pick == "":
+        return None
+    if pick.isdigit() and 1 <= int(pick) <= len(sites):
+        return sites[int(pick) - 1]
+    key, site = resolve_site(pick)
+    return key if site else None
+
+
+def _pick_office(key, servers):
+    offices = SITES[key]["offices"]
+    rec = load_office_cache().get(key, {})
+    seated = [r for r in servers if r.get("lat") is not None]
+    print()
+    print(bold(f"{SITES[key]['label']} — {len(offices)} offices"))
+    for i, (cc, place, la, lo, q) in enumerate(offices, 1):
+        near = ""
+        hit = rec.get(place)
+        if seated:
+            ela, elo = (hit["lat"], hit["lon"]) if hit else (la, lo)
+            b = min(seated, key=lambda r: haversine_km(r["lat"], r["lon"], ela, elo))
+            d = haversine_km(b["lat"], b["lon"], ela, elo)
+            near = f"{d:,.0f} km · {clip(b['city'] or b['host'], 20)} ({b['cc']})"
+        star = "◈" if hit else " "
+        print(f" {i:2}{star} {clip(place, 32):<32} {near}")
+    pick = _ask("office number, 'hq', or 'all' [Enter = HQ]: ")
+    if pick is None:
+        return None
+    if pick.lower() == "all":
+        return ["--office", "all"]
+    if pick == "" or pick.lower() == "hq":
+        return []
+    if pick.isdigit() and 1 <= int(pick) <= len(offices):
+        return ["--office", offices[int(pick) - 1][1]]
+    return ["--office", pick]
+
+
+def _connect_via(argv):
+    print()
+    print(bold("$ " + " ".join(argv)))
+    rc = run_in_ui(argv)
+    return ("connected ✓ — see the panel" if rc == 0
+            else f"exit code {rc} (messages above)")
+
+
+def intro_wizard():
+    cache = load_cache()
+    servers = (cache or {}).get("servers") or []
+    if not servers:
+        return "nothing cached yet — press [R] to refresh first"
+    print("\x1b[H\x1b[2J")
+    print(bold("connect — pick a mode"))
+    print("  1) best available anywhere     (fastest route, any country)")
+    print("  2) by country / city")
+    print("  3) appear near a platform office")
+    mode = _ask("mode [1/2/3] (default 1): ", "1")
+    if mode is None:
+        return "aborted"
+    if mode == "3":
+        key = _pick_site()
+        if not key:
+            return "aborted"
+        tail = _pick_office(key, servers)
+        if tail is None:
+            return "aborted"
+        return _connect_via(["sudo", "vpn", "connect", "--site", key] + tail)
+    if mode == "2":
+        counts, names = {}, {}
+        for r in servers:
+            counts[r["cc"]] = counts.get(r["cc"], 0) + 1
+            names[r["cc"]] = r["country"]
+        print()
+        for i, (cc, n) in enumerate(
+                sorted(counts.items(), key=lambda kv: (-kv[1], kv[0])), 1):
+            print(f" {i:2}) {cc:<4} {clip(names[cc], 32):<32} {n} servers")
+            if i >= 30:
+                print("     … more — type any code or name")
+                break
+        cc = _ask("country code or name [Enter = cancel]: ")
+        if cc is None:
+            return "aborted"
+        if cc == "":
+            return "aborted"
+        chosen = cc if cc in counts else (
+            cc.upper() if cc.upper() in counts else cc)
+        city = _ask("city (optional, Enter to skip, matching anywhere): ")
+        if city is None:
+            return "aborted"
+        argv = ["sudo", "vpn", "connect", "--country", chosen]
+        if city:
+            argv += ["--city", city]
+        return _connect_via(argv)
+    return _connect_via(["sudo", "vpn", "connect"])
+
+
+def intro_refresh():
+    print("\x1b[?25h\x1b[H\x1b[2J")
+    print(bold("refreshing — pulling VPN Gate's live volunteer list …"))
+    servers = refresh_servers(enrich=True)
+    ping_ok = sum(1 for r in servers if 0 < r["ping"] < 900)
+    _GEO_MEMO["t"] = 0.0
+    return (f"refreshed ✓  {len(servers)} servers · "
+            f"{len({r['cc'] for r in servers})} countries · "
+            f"{ping_ok} responsive right now")
+
+
+def intro_disconnect():
+    rc = run_in_ui(["sudo", "vpn", "disconnect"])
+    return "disconnected ✓" if rc == 0 else f"exit code {rc}"
+
+
+def cmd_intro(args):
+    if not ansi_ok():
+        intro_static()
+        return 0
+    msg = ""
+    print("\x1b[?25l", end="", flush=True)          # hide cursor
+    try:
+        while True:
+            s = intro_snapshot()
+            print("\x1b[H\x1b[2J" + intro_render(s, msg), flush=True)
+            msg = ""
+            try:
+                key = read_key()
+            except KeyboardInterrupt:
+                break
+            act = INTRO_KEYS.get(key)
+            if key == "esc":
+                break
+            if act == "quit":
+                break
+            elif act == "refresh":
+                msg = intro_refresh()
+            elif act == "connect":
+                msg = intro_wizard()
+            elif act == "sites":
+                key2 = _pick_site()
+                if key2 is None or not key2:
+                    msg = "aborted"
+                else:
+                    servers = (load_cache() or {}).get("servers") or []
+                    tail = _pick_office(key2, servers)
+                    if tail is None:
+                        msg = "aborted"
+                    else:
+                        msg = _connect_via(
+                            ["sudo", "vpn", "connect", "--site", key2] + tail)
+            elif act == "disconnect":
+                msg = intro_disconnect()
+    finally:
+        print("\x1b[?25h", end="")                # cursor back
+        print()
+    return 0
+
+
+def build_parser():
     ap = argparse.ArgumentParser(
         prog=APP,
         description=("Manage a free, no-account VPN over public VPN Gate servers. "
                      "Server data: academic VPN Gate project (vpngate.net)."),
-        epilog=("Connect/disconnect need root: run them with 'sudo vpn'. "
+        epilog=("Bare 'vpn' opens the interactive screen. Connect/disconnect "
+                "need root: run them with 'sudo vpn'. "
                 "Countries and city lists refresh live with 'vpn refresh'."),
     )
     ap.add_argument("--version", action="version",
                     version=f"{APP} {APP_VERSION} (beta)")
-    sub = ap.add_subparsers(dest="cmd", required=True)
+    sub = ap.add_subparsers(dest="cmd", required=False)
 
     p = sub.add_parser("refresh", help="download + parse + geolocate the server list")
     p.add_argument("--no-cities", action="store_true",
@@ -1418,7 +1786,17 @@ def main():
     p = sub.add_parser("ip", help="show where your traffic appears from right now")
     p.set_defaults(fn=cmd_ip)
 
-    args = ap.parse_args()
+    p = sub.add_parser("intro", help="open the interactive screen "
+                                     "(this is the default when run bare)")
+    p.set_defaults(fn=cmd_intro)
+
+    return ap
+
+
+def main():
+    args = build_parser().parse_args()
+    if args.cmd is None:
+        args.fn = cmd_intro          # bare `vpn` → the intro session
     try:
         rc = args.fn(args) or 0
     except KeyboardInterrupt:
