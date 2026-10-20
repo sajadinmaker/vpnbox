@@ -1,0 +1,35 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Syntax
+        run: |
+          python3 -m compileall -q vpnbox.py test_vpnbox.py
+          bash -n install.sh uninstall.sh
+
+      - name: CLI smoke (no network, no root)
+        run: |
+          python3 vpnbox.py --version
+          python3 vpnbox.py --help > /dev/null
+          python3 vpnbox.py sites > /dev/null
+
+      - name: Unit tests
+        run: python3 -m unittest discover -s . -p "test_*.py" -v

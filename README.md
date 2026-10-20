@@ -209,6 +209,22 @@ would have already failed it over to the next candidate.
 Peek at any recent native daemon activity any time with
 `tail -40 /var/log/vpnbox.log`.
 
+## Developing
+
+The whole program is `vpnbox.py` — designed to be read, not just run. The test
+suite is hermetic (no network, no root), and CI runs it on every push across
+Python 3.9 → 3.13; pushing a `v*` tag builds and publishes the release
+automatically.
+
+```bash
+make check                 # syntax: compileall + bash -n
+make test                  # hermetic unit tests (site DB, geography, ranking, config)
+make dist                  # build the release tarball + SHA256SUMS locally
+```
+
+See `CONTRIBUTING.md` for the design rules (one file, stdlib-only, no accounts)
+and the release checklist.
+
 ## Attribution
 
 Server list and relay profiles by the **VPN Gate Academic Experiment**,

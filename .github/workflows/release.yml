@@ -1,0 +1,50 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tag must match APP_VERSION
+        run: |
+          V="${GITHUB_REF_NAME#v}"
+          grep -qx "APP_VERSION = \"${V}\"" vpnbox.py
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Smoke + unit tests
+        run: |
+          python3 vpnbox.py --version
+          python3 -m unittest discover -s . -p "test_*.py" -v
+
+      - name: Build release tarball
+        run: |
+          V="${GITHUB_REF_NAME#v}"
+          mkdir -p "pkg/vpnbox-${V}" dist
+          cp vpnbox.py README.md CHANGELOG.md LICENSE install.sh \
+             uninstall.sh "pkg/vpnbox-${V}/"
+          tar -czf "dist/vpnbox-${V}.tar.gz" -C pkg "vpnbox-${V}"
+          cd dist && sha256sum "vpnbox-${V}.tar.gz" > SHA256SUMS
+
+      - name: Publish to GitHub Releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          V="${GITHUB_REF_NAME#v}"
+          if ! gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
+            gh release create "$GITHUB_REF_NAME" --title "vpnbox ${V}" \
+              --notes "Fresh stable-point release. See CHANGELOG.md for notes." \
+              --latest=true
+          fi
+          gh release upload "$GITHUB_REF_NAME" \
+            dist/"vpnbox-${V}".tar.gz dist/SHA256SUMS --clobber
