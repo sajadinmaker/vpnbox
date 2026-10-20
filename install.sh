@@ -3,9 +3,9 @@
 # Usage:  sudo ./install.sh [PREFIX]     (PREFIX defaults to /usr/local)
 set -euo pipefail
 
-VERSION="1.0.0-beta1"
-PREFIX="${1:-${PREFIX:-/usr/local}}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
+VERSION="$(sed -n 's/^APP_VERSION = "\(.*\)"/\1/p' "$HERE/vpnbox.py")"
+PREFIX="${1:-${PREFIX:-/usr/local}}"
 
 if [ "$(id -u)" -ne 0 ]; then
     echo "installing to $PREFIX needs root:  sudo ./install.sh" >&2
