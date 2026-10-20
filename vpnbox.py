@@ -47,7 +47,7 @@ import urllib.parse
 import urllib.request
 
 APP = "vpnbox"
-APP_VERSION = "1.0.0-beta4"
+APP_VERSION = "1.0.0-beta"
 UA = f"{APP}/{APP_VERSION} (linux; free public VPN client)"
 PID_FILE = "/run/vpnbox.pid"
 LOG_FILE = "/var/log/vpnbox.log"
@@ -1357,12 +1357,8 @@ def cmd_sites(args):
 # interactive intro — bare `vpn` / `vpn intro`; pure ANSI + stdlib, no curses
 # ----------------------------------------------------------------------------
 
-BANNER = """\
- _    __      ____       _   __      ____      ____      _  __
-| |  / /     / __ \\     / | / /     / __ )    / __ \\    | |\\ /
-| | / /     / /_/ /    /  |/ /     / __  |   / / / /    |   /
-| |\\ /     / ____/    / /|  /     / /_/ /   / /_/ /    /   |
-|___/     /_/        /_/ |_/     /_____/    \\____/    /_/|_|""".strip("\n")
+TITLE = "   ".join("VPNBOX")       # letterspaced, painted bold red
+RULE = "─" * 60                    # thin red rule under the title
 
 # ordered most-common-first (lazygit/k9s pattern: numeric keys jump straight
 # to an action from anywhere on the screen; letters stay as secret aliases)
@@ -1480,17 +1476,19 @@ def intro_snapshot(fetch=True):
 
 def _boxed(rows):
     w = max((len(strip_ansi(r)) for r in rows), default=0)
-    box = [cyan("┌" + "─" * (w + 2) + "┐")]
+    box = [red("┌" + "─" * (w + 2) + "┐")]
     for r in rows:
-        box.append(cyan("│ ") + r + " " * (w - len(strip_ansi(r))) + cyan(" │"))
-    box.append(cyan("└" + "─" * (w + 2) + "┘"))
+        box.append(red("│ ") + r + " " * (w - len(strip_ansi(r))) + red(" │"))
+    box.append(red("└" + "─" * (w + 2) + "┘"))
     return box
 
 
 def intro_action_rows(sel):
     rows = []
     for i, (_aid, desc, _fn) in enumerate(INTRO_ACTIONS):
-        row = f"{'▸' if i == sel else ' '} {i + 1}  {desc}"
+        mark = red("▸") if i == sel else " "
+        num = paint(f"{i + 1}", "1;31")
+        row = f"{mark} {num}  {desc}"
         rows.append(rev(row) if i == sel else row)
     pad = max(len(strip_ansi(r)) for r in rows)
     return [r + " " * (pad - len(strip_ansi(r))) for r in rows]
@@ -1498,12 +1496,11 @@ def intro_action_rows(sel):
 
 def intro_render(s, msg="", sel=0):
     w = max(64, min(tty_width(), 100))
-    out = [fit_center(cyan(line), w) for line in BANNER.splitlines()]
-    out.append(fit_center(bold(f"{APP} {APP_VERSION}") +
-                          " — free public VPN · no account · no key", w))
-    out.append(fit_center("sources: VPN Gate · OpenStreetMap · ip-api", w))
-    out.append(fit_center(dim("by sajad — github.com/sajadinmaker"), w))
-    out.append("")
+    out = [fit_center(paint(TITLE, "1;31"), w),      # bold red title
+           fit_center(paint(RULE, "31"), w),         # thin red rule
+           fit_center(dim(f"{APP} {APP_VERSION}"
+                          " · by sajad — github.com/sajadinmaker"), w),
+           ""]
     # status line (btop style: header panel, human words, no jargon)
     state = green("● connected") if s["connected"] else red("○ not connected")
     where = "unknown — no internet?"
@@ -1539,19 +1536,18 @@ def intro_render(s, msg="", sel=0):
 
 
 def intro_static():
-    """non-TTY path (pipes, CI): banner + status + numbered menu, exit 0."""
-    for line in BANNER.splitlines():
-        print(line)
-    print(f"{APP} {APP_VERSION} — free public VPN for Linux "
-          "(VPN Gate · OpenStreetMap · ip-api)")
-    print("by sajad — github.com/sajadinmaker")
+    """non-TTY path (pipes, CI): title + status + numbered menu, exit 0."""
+    print(paint(TITLE, "1;31"))
+    print(paint(RULE, "31"))
+    print(dim("by sajad — github.com/sajadinmaker"))
+    print()
     s = intro_snapshot(fetch=False)
     state = "● connected" if s["connected"] else "○ not connected"
     if s["servers"]:
         stats = f"{s['servers']} live servers · {s['countries']} countries"
     else:
         stats = "no server list yet"
-    print(f"{state}  ·  {stats}")
+    print(f"{APP} {APP_VERSION} · {state} · {stats}")
     print()
     print("menu — the number does the same thing once you run `vpn` in a "
           "real terminal:")

@@ -140,12 +140,11 @@ class Intro(unittest.TestCase):
                  "age": 300, "ip": "203.0.113.9", "city": "Bengaluru",
                  "country": "India"}
 
-    def test_banner_is_pure_ascii(self):
-        lines = v.BANNER.splitlines()
-        self.assertGreaterEqual(len(lines), 5)
-        self.assertLessEqual(max(len(l) for l in lines), 70)
-        self.assertTrue(all(ord(c) < 128 for line in lines for c in line),
-                        "banner must be pure ASCII to render everywhere")
+    def test_intro_header_is_minimal(self):
+        # no ASCII banner, no taglines — a letterspaced bold-red title only
+        self.assertNotIn("▁", v.TITLE)
+        self.assertNotIn("#", v.TITLE)
+        self.assertEqual("".join(v.TITLE.split()), "VPNBOX")
 
     def test_strip_ansi_and_fit_center(self):
         self.assertEqual(v.strip_ansi("\x1b[32mabc\x1b[0m"), "abc")
@@ -184,6 +183,10 @@ class Intro(unittest.TestCase):
         self.assertIn("sajadinmaker", flat)
         # the selected row carries the selection marker
         self.assertIn("▸ 3", flat)
+        # the clutter the user rejected is gone
+        self.assertNotIn("no account", flat)
+        self.assertNotIn("sources:", flat)
+        self.assertNotIn("OpenStreetMap", flat)
 
     def test_static_intro_is_hermetic(self):
         import contextlib

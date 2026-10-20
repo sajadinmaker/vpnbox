@@ -2,7 +2,7 @@
 
 **A free VPN for Linux that needs no account, no key, and no payment.**
 
-v1.0.0-beta4 · 2026-10-20 · one Python file, standard library only
+v1.0.0-beta · 2026-10-20 · one Python file, standard library only
 built by **sajad** — <https://github.com/sajadinmaker>
 
 ---
@@ -36,8 +36,8 @@ Arch …), plus Python 3.8+. `install.sh` checks all of this for you:
 Grab the release tarball, unpack, install:
 
 ```bash
-tar -xzf vpnbox-1.0.0-beta4.tar.gz
-cd vpnbox-1.0.0-beta4
+tar -xzf vpnbox-1.0.0-beta.tar.gz
+cd vpnbox-1.0.0-beta
 sudo ./install.sh            # → /usr/local/bin/vpn, verified with --version
 ```
 
@@ -69,20 +69,16 @@ command to copy-paste if you forget.
 Run `vpn` with no arguments (or `vpn intro`):
 
 ```
- _    __      ____       _   __      ____      ____      _  __
-| |  / /     / __ \     / | / /     / __ )    / __ \    | |\ /
-| | / /     / /_/ /    /  |/ /     / __  |   / / / /    |   /
-| |\ /     / ____/    / /|  /     / /_/ /   / /_/ /    /   /
-|___/     /_/        /_/ |_/     /_____/    \____/    /_/|_|
-        vpnbox 1.0.0-beta4 — free public VPN · no account · no key
-              by sajad — github.com/sajadinmaker
+        V   P   N   B   O   X
+  ────────────────────────────────────────────────
+  vpnbox 1.0.0-beta · by sajad — github.com/sajadinmaker
 
  ┌───────────────────────────────────────────────────────────┐
  │ ● not connected   your IP: 112.34.5.6  ·  Bengaluru, India│
  │ 214 live servers · 14 countries · list refreshed 5 min ago│
  └───────────────────────────────────────────────────────────┘
 
- ▸ 1  Connect to the fastest server
+   1  Connect to the fastest server
    2  Choose a country or city
    3  Appear near a platform office (Instagram, X, YouTube…)
    4  Refresh the live server list
@@ -92,13 +88,15 @@ Run `vpn` with no arguments (or `vpn intro`):
  ↑/↓ select · 1–6 quick · Enter run · q quit
 ```
 
+Everything is on a clean red-accented screen — bold red title, a thin red
+rule, and a red-bordered live status panel; no ASCII art, no slogans.
 Patterned after well-loved TUIs (lazygit, btop, htop): up/down moves the
 highlight, Enter runs it, **1–6 do it instantly**, q leaves, and every
 prompt accepts Enter to bail you out — you can never get stuck. Pressing
 **1** connects to the fastest server in one keystroke; **3** walks you
 through picking a platform and office with plain numbered questions. The
 status panel re-renders after every action, and in pipes or CI the bare
-run degrades gracefully to the banner + numbered command list, exit 0.
+run degrades gracefully to the red title + numbered command list, exit 0.
 
 ## Everyday connections
 
