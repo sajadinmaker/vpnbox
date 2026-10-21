@@ -7,14 +7,10 @@ built by **sajadinmaker** — <https://github.com/sajadinmaker>
 
 ---
 
-vpnbox turns the public internet's most underrated resource — the [VPN Gate](https://vpngate.net)
-relay experiment run by the University of Tsukuba — into a proper Linux command-line
-VPN client. Each time you ask, it fetches the live list of volunteer-run VPN servers,
-tells you what's reachable right now (with real ping and speed numbers), and connects
-you through OpenVPN with full-tunnel route enforcement and leak-proof DNS.
-
-If you've ever wished for *"just give me a working VPN, in any country, for free"* —
-that's the whole point of this tool.
+vpnbox is a command-line VPN client for Linux built on [VPN Gate](https://vpngate.net), the
+volunteer relay experiment run by the University of Tsukuba. It fetches the live relay
+list, shows what is reachable right now (with real ping and speed numbers), and connects
+through OpenVPN with full-tunnel route enforcement and leak-safe DNS handling.
 
 ```bash
 vpn refresh                          # see the world's volunteers as they are now
@@ -49,7 +45,7 @@ sudo ./uninstall.sh --purge  # also wipe runtime state (/var/log, /run, /var/tmp
 rm -rf ~/.cache/vpnbox       # optional: drop the server/office caches too
 ```
 
-## Your first five minutes
+## Quick start
 
 ```bash
 vpn refresh                  # fetch the live server list (~15 s) and geolocate it
@@ -61,10 +57,9 @@ sudo vpn disconnect          # clean teardown: process, routes, DNS
 ```
 
 Connecting needs `sudo` because VPN interfaces, routes and DNS policies are system
-state — this is the one place vpnbox insists on root, and it prints the exact
-command to copy-paste if you forget.
+state. It prints the exact command to copy-paste if you forget.
 
-## Open it like an app
+## Interactive menu
 
 Run `vpn` with no arguments (or `vpn intro`):
 
@@ -93,26 +88,21 @@ Run `vpn` with no arguments (or `vpn intro`):
   ↑/↓ select · 1–6 quick · Enter run · q quit
 ```
 
-Everything is on a clean red-accented screen — the **VPNBOX** name is
-*drawn* as huge mono block letters inside a solid red band (5 rows; on
-very wide terminals the letter cells double in width; `VPNBOX_PLAIN=1`
-falls back to a bold letterspaced strip), followed by a throttled red
-rule and a red-bordered live status panel; no ASCII art, no slogans.
-The whole UI is responsive from 46 to 120 columns: narrow screens stack
-the status facts instead of overflowing, and menu labels shorten to fit.
-Patterned
-after well-loved TUIs (lazygit, btop, htop): up/down moves the highlight,
-Enter runs it, **1–6 do it instantly**, q leaves. Dialogs follow the same
-rule everywhere: **Enter commits the forward choice** (the top pool, the
-first entry, or the HQ — always shown in the prompt), **Esc backs out**.
-Type fast — a number followed by Enter in one burst — and the stray
-Enter can never answer a dialog for you. Pressing **1** connects to the
-fastest server in one keystroke; **3** walks you through picking a
-platform and office with plain numbered questions. The status panel
-re-renders after every action, and in pipes or CI the bare run degrades
-gracefully to the red title + numbered command list, exit 0.
+The **VPNBOX** name is drawn as large mono block letters inside a red band
+(`VPNBOX_PLAIN=1` falls back to a plain letterspaced strip). The layout is
+responsive from 46 to 120 columns: narrow screens stack the status facts
+and shorten menu labels instead of overflowing.
 
-## Everyday connections
+Navigation is keyboard-driven: ↑/↓ moves the highlight, Enter runs it,
+keys 1–6 jump straight to a task, q quits. Dialogs behave the same
+everywhere: **Enter commits the default shown in the prompt**, **Esc
+backs out**, and typed-ahead input is drained so a fast number+Enter
+burst can never answer the next dialog by accident. Pressing **1**
+connects to the fastest server directly; **3** walks through the
+platform/office picker one numbered question at a time. In pipes or CI
+the bare run prints a plain numbered command list and exits 0.
+
+## Connection options
 
 Everything that shapes *where* you connect is an option to `vpn connect`:
 
@@ -125,20 +115,18 @@ sudo vpn connect CA --nearest             # …the closest country that *is* ali
 ```
 
 You never pick a server by hand unless you want to: after `--country`/`--city`,
-ranking is automatic (more below), and if a volunteer server refuses to handshake
-— they die by the hour — vpnbox fails fast on it and tries the next best
-candidate, up to three times by default (`--max-tries N` to change). Once you've
-browsed with `vpn servers JP`, you can also pin an exact entry with
-`--index 3`, or skip a flaky one with `--skip 1`. When vpnbox lands, it prints
-the exit IP and its city/ISP so you can see exactly where you appear from; if
-that country doesn't match what you asked for, it warns you rather than
-pretending.
+ranking is automatic (more below), and if a volunteer server refuses to handshake,
+vpnbox fails fast on it and tries the next best candidate, up to three times by
+default (`--max-tries N` to change). Once you've browsed with `vpn servers JP`,
+you can also pin an exact entry with `--index 3`, or skip a flaky one with
+`--skip 1`. When vpnbox lands, it prints the exit IP and its city/ISP so you
+can see exactly where you appear from; if that country doesn't match what you
+asked for, it warns you rather than misreporting.
 
-## Appear near a platform's office — the fun part
+## Appear near a platform office
 
-This is vpnbox's signature feature. It knows the worldwide office locations of
-**29 platforms — 239 offices across 31 countries** — so you can ask to *look*
-like you're near one:
+vpnbox knows the worldwide office locations of **29 platforms — 239 offices
+across 31 countries** and can connect you through a server close to one:
 
 ```bash
 vpn sites                                 # the whole catalogue, one row per platform
@@ -149,7 +137,7 @@ sudo vpn connect --site meta --office all # nearest to ANY of its 29 offices wor
 sudo vpn connect --site line              # LINE: Tokyo/Bangkok; kakaotalk → Seoul; telegram → Dubai
 ```
 
-A few things worth understanding:
+Notes:
 
 - **`--site` alone means the primary HQ.** For Meta that's 1601 Willow Road,
   Menlo Park; for YouTube, 901 Cherry Avenue, San Bruno. Predictable by design.
@@ -160,26 +148,25 @@ A few things worth understanding:
 - **Addresses are geocoded precisely**, not guessed: on first use vpnbox asks the
   OpenStreetMap Nominatim service for each office's exact coordinates (one polite
   request per second, their policy), then caches them forever in
-  `~/.cache/vpnbox/offices.json`. Point the marker `◈` in `vpn sites` output means
+  `~/.cache/vpnbox/offices.json`. The `◈` marker in `vpn sites` output means
   "OSM-precise"; everything degrades gracefully to city-level coordinates if OSM
   is unreachable. `vpn sites --recache` re-runs the whole precision pass.
-- **Distance is balanced with reality.** Offices are bucketed into distance
-  tiers around the server (≤40, ≤150, ≤500, ≤1500 km). Within a tier, ping,
-  speed and UDP preference decide — so "4 km from the Bangkok office" is still
-  the *fast alive server near there*, never a close-but-dead one.
+- **Distance is balanced with reachability.** Offices are bucketed into distance
+  tiers around the server (≤40, ≤150, ≤500, ≤1500 km); within a tier, ping,
+  speed and UDP preference decide. The closest office therefore still resolves
+  to a live, responsive server — never a close-but-dead one.
 
 **The platforms**: meta, instagram, threads, x, whatsapp, google, youtube,
 microsoft, linkedin, tiktok, snapchat, discord, reddit, pinterest, apple,
 telegram, signal, tumblr, viber, line, kakaotalk, wechat, netflix, twitch,
 slack, zoom, quora, spotify, vk.
 
-One honest note: appearing near an office changes **your exit IP and its
-location** — that's all it can honestly do. It is not a circumvention tool for
-a platform's own server-side policies.
+Appearing near an office changes **your exit IP and its reported location**
+only — it is not a way around a platform's own server-side policies.
 
-## What's happening under the hood
+## How it works
 
-Worth knowing if you're auditing it — the whole implementation is one readable file:
+The whole implementation is a single readable file:
 
 - `vpn refresh` downloads VPN Gate's official CSV API
   (`https://www.vpngate.net/api/iphone/`), parses the embedded OpenVPN profiles for
@@ -199,35 +186,32 @@ Worth knowing if you're auditing it — the whole implementation is one readable
 - **Success detection can't be fooled by history:** the daemon log file is shared
   between sessions, so vpnbox only ever reads bytes *appended after* its own
   launch. A stale "Initialization Sequence Completed" from yesterday can never
-  count as today's handshake — a bug caught and fixed in live testing on
-  2026-10-20.
+  count as today's handshake.
 - UDP servers are preferred in ranking; volunteer TCP relays drop out more often.
 
-## Honest limitations
+## Limitations
 
 - **These servers are volunteers.** The map changes every hour: pools in
   JP/KR/TH/US are usually strong; individual countries appear and disappear with
-  the volunteers behind them. Treat a fresh `vpn refresh` as part of the ritual.
-- **Privacy is the operator's word, not ours.** Each relay decides its logging
+  the volunteers behind them. Run `vpn refresh` before connecting.
+- **Logging is defined per operator.** Each relay decides its logging
   policy; VPN Gate ships that field and vpnbox stores it
   (`jq '.servers[] | .log' ~/.cache/vpnbox/servers.json`). Read it before doing
   anything sensitive.
-- **There is no kill switch.** If OpenVPN dies, your traffic flows out your
-  normal connection. If that matters to you, add a firewall policy (ufw: allow
-  outbound only on `tun0`) — or run your own WireGuard on a rented VPS: one
-  country, but entirely under your control.
+- **There is no kill switch.** If OpenVPN dies, traffic resumes through your
+  normal connection. If that matters, add a firewall policy (e.g. ufw allow
+  outbound only on `tun0`) or run your own WireGuard on a VPS — one country,
+  but fully under your control.
 - **A free third-party geolocation service** (ip-api.com) does the city
   enrichment; if it's slow or absent, server listing still works, just without
   city names.
 - Per VPN Gate's terms of use, their attribution must travel with any tool that
   reads their list — it does, in `LICENSE`.
 
-## Debugging a connection (the verb-6 recipe)
+## Debugging a connection
 
 When a connect fails in a way you don't understand, run OpenVPN in the foreground
-with maximum verbosity and read what actually happened — this recipe is the
-session that caught a real server dying mid-test (TLS resets sent, zero replies,
-server had flapped between two runs):
+with maximum verbosity and read what actually happened:
 
 ```bash
 # 1) build a debug config from the best current pool (from the vpnbox folder)
@@ -255,8 +239,7 @@ with code 0. A run with repeated `P_CONTROL_HARD_RESET_CLIENT_V2` writes and *no
 reads* means the server simply isn't answering; the normal `vpn connect` path
 would have already failed it over to the next candidate.
 
-Peek at any recent native daemon activity any time with
-`tail -40 /var/log/vpnbox.log`.
+Recent daemon activity is visible at any time: `tail -40 /var/log/vpnbox.log`.
 
 ## Developing
 
