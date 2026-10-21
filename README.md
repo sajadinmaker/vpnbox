@@ -88,19 +88,25 @@ Run `vpn` with no arguments (or `vpn intro`):
   ↑/↓ select · 1–6 quick · Enter run · q quit
 ```
 
-The **VPNBOX** name is drawn as large mono block letters inside a red band
-(`VPNBOX_PLAIN=1` falls back to a plain letterspaced strip). The layout is
-responsive from 46 to 120 columns: narrow screens stack the status facts
-and shorten menu labels instead of overflowing.
+Everything is on a clean red-accented screen — the **VPNBOX** name is
+*drawn* as huge mono block letters inside a solid red band (5 rows; on
+very wide terminals the letter cells double in width; `VPNBOX_PLAIN=1`
+falls back to a bold letterspaced strip), followed by a thin red rule and a
+red-bordered live status panel. The whole UI is responsive from 46 to 120
+columns: narrow screens stack the status facts instead of overflowing, and
+menu labels shorten to fit.
 
-Navigation is keyboard-driven: ↑/↓ moves the highlight, Enter runs it,
-keys 1–6 jump straight to a task, q quits. Dialogs behave the same
-everywhere: **Enter commits the default shown in the prompt**, **Esc
-backs out**, and typed-ahead input is drained so a fast number+Enter
-burst can never answer the next dialog by accident. Pressing **1**
-connects to the fastest server directly; **3** walks through the
-platform/office picker one numbered question at a time. In pipes or CI
-the bare run prints a plain numbered command list and exits 0.
+Navigation is patterned after classic TUIs (lazygit, btop, htop): up/down
+moves the highlight, Enter runs it, **1–6 do it instantly**, q leaves.
+Dialogs follow the same rule everywhere: **Enter commits the forward
+choice** (the top pool, the first entry, or the HQ — always shown in the
+prompt), **Esc backs out**. Type fast — a number followed by Enter in one
+burst — and the stray Enter can never answer a dialog for you.
+
+Pressing **1** connects to the fastest server in one keystroke; **3** walks
+you through picking a platform and office with plain numbered questions.
+The status panel re-renders after every action, and in pipes or CI the bare
+run degrades gracefully to a red title + numbered command list, exit 0.
 
 ## Connection options
 
