@@ -91,7 +91,7 @@ Run `vpn` with no arguments (or `vpn intro`):
    6  Quit
 
   ↑/↓ select · 1–6 quick · Enter run · q quit
-`````````
+```
 
 Everything is on a clean red-accented screen — the **VPNBOX** name is
 *drawn* as huge mono block letters inside a solid red band (5 rows; on
