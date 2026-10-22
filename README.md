@@ -76,7 +76,7 @@ route you through a server near one:
 | `sudo vpn connect --site meta --office all` | Connects nearest to any office worldwide. |
 
 Office addresses are geocoded through OpenStreetMap and cached in
-`~/.cache/vpnbox/offices.json`. Offices fall into distance tiers; within a
+`~/.cache/vpnbox/offices.json`. Offices fall into distance tiers. Within a
 tier, ping, speed, and UDP preference decide. The nearest office therefore
 still resolves to a server that is alive.
 
@@ -105,5 +105,5 @@ design rules and the release checklist.
 
 Server list and relay profiles: VPN Gate Academic Experiment, University of
 Tsukuba. Geocoding: OpenStreetMap Nominatim. IP geolocation: ip-api.com.
-OpenVPN is a registered trademark of OpenVPN Inc. vpnbox is a client only; it
+OpenVPN is a registered trademark of OpenVPN Inc. vpnbox is a client only. It
 operates no servers. Released under the MIT license. See `LICENSE`.
