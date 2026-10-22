@@ -14,7 +14,7 @@ read these before opening a pull request.
    failure — surface it (and then auto-failover if a *better* candidate exists).
 4. **Polite to shared infrastructure.** Nominatim: max 1 request/second, a real
    User-Agent. ip-api: batch endpoint only (100 IPs/request).
-5. **Honest status output.** Exit IP is always printed after a connect; country
+5. **Accurate status output.** Exit IP is always printed after a connect; country
    mismatch is a warning, never a silent success.
 
 ## Development flow
