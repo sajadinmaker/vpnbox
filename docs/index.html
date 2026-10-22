@@ -3,14 +3,18 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="vpnbox — free VPN for Linux. No account, no key, no payment. One Python file.">
+<meta name="description" content="vpnbox — a free, open-source VPN client for Linux built on VPN Gate. One Python file, full-tunnel OpenVPN, no accounts.">
+<meta property="og:title" content="vpnbox">
+<meta property="og:description" content="Free VPN for Linux. No account, no key, no payment. One Python file, standard library only.">
 <title>vpnbox</title>
 <style>
   :root {
     --fg: #1c1c1c;
     --muted: #6b6b6b;
     --bg: #ffffff;
-    --red: #d0342c;
+    --surface: color-mix(in srgb, var(--fg) 5%, transparent);
+    --border: color-mix(in srgb, var(--fg) 16%, transparent);
+    --red: #c8392f;
   }
   @media (prefers-color-scheme: dark) {
     :root {
@@ -21,52 +25,62 @@
   }
   * { box-sizing: border-box; }
   body {
-    font: 16px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif;
+    font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif;
     color: var(--fg);
     background: var(--bg);
-    max-width: 42rem;
+    max-width: 44rem;
     margin: 0 auto;
-    padding: 0 1.2rem 4rem;
+    padding: 0 1.4rem 4rem;
   }
   header {
     background: var(--red);
     color: #fff;
-    margin: 2.4rem 0 1.2rem;
-    padding: .4rem 0 .5rem;
+    margin: 2.4rem 0 2rem;
+    padding: .5rem 0 .55rem;
   }
   header h1 {
-    font-size: 2rem;
-    font-weight: 800;
-    letter-spacing: .35em;
+    font-size: 1.9rem;
+    font-weight: 700;
+    letter-spacing: .38em;
     margin: 0;
     text-align: center;
   }
+  .lede { font-size: 1.06rem; margin-bottom: 1.4rem; }
   h2 {
-    font-size: .95rem;
+    font-size: .85rem;
     font-weight: 600;
-    color: var(--red);
+    color: var(--muted);
     text-transform: uppercase;
-    letter-spacing: .12em;
-    margin: 2.4rem 0 .6rem;
+    letter-spacing: .14em;
+    margin: 2.2rem 0 .8rem;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: .35rem;
   }
-  a { color: var(--red); text-decoration: underline; text-underline-offset: 2px; }
+  a { color: var(--red); text-decoration: none; border-bottom: 1px solid var(--red); }
+  a:hover { text-decoration: none; color: var(--fg); border-color: var(--muted); }
   p { margin: 0 0 1rem; }
   pre {
-    background: color-mix(in srgb, var(--fg) 6%, transparent);
-    border: 1px solid color-mix(in srgb, var(--fg) 18%, transparent);
-    padding: .8rem 1rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: .75rem 1rem;
     overflow-x: auto;
     line-height: 1.5;
+    font-size: .9em;
   }
-  code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .92em; }
-  ul { margin: 0 0 1rem; padding-left: 1.2rem; }
-  li { margin: .25rem 0; }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .9em; }
+  ul { margin: 0 0 1rem; padding-left: 1.15rem; }
+  li { margin: .3rem 0; }
+  li::marker { color: var(--muted); }
+  dl { margin: 0; }
+  dt { font-weight: 600; margin-top: .8rem; }
+  dd { margin: 0 0 .2rem; color: var(--muted); }
   footer {
     margin-top: 3rem;
     color: var(--muted);
-    font-size: .88rem;
-    border-top: 1px solid color-mix(in srgb, var(--fg) 14%, transparent);
+    font-size: .85rem;
+    border-top: 1px solid var(--border);
     padding-top: 1rem;
+    line-height: 1.5;
   }
 </style>
 </head>
@@ -74,45 +88,71 @@
 
 <header><h1>VPNBOX</h1></header>
 
-<p><strong>A free VPN for Linux.</strong> No account, no key, no payment.
-One Python file, standard library only, built on the
-<a href="https://vpngate.net">VPN Gate</a> volunteer relay experiment
-(University of Tsukuba).</p>
+<p class="lede"><strong>A free, open-source VPN client for Linux.</strong>
+No account, no key, no payment. vpnbox reads the live volunteer server list of
+the <a href="https://vpngate.net">VPN Gate</a> academic experiment (University
+of Tsukuba), ranks it by reachability, and connects through OpenVPN — one
+Python file, standard library only.</p>
+
+<h2>Install</h2>
 
 <pre>tar -xzf vpnbox-1.0.0-beta.tar.gz
 cd vpnbox-1.0.0-beta
 sudo ./install.sh</pre>
 
-<h2>About</h2>
+<p>Requires OpenVPN 2.5+, <code>systemd-resolved</code>, and Python 3.8+.
+Remove with <code>sudo ./uninstall.sh</code>.</p>
+
+<h2>Usage</h2>
+
+<pre>vpn refresh                          # fetch the live server list
+vpn countries                        # what is reachable right now
+sudo vpn connect                     # fastest server, anywhere
+sudo vpn connect --country JP --city chiyoda
+sudo vpn connect --site meta --office all
+vpn status                           # exit IP and location
+sudo vpn disconnect</pre>
+
+<p>Connections use <code>sudo</code> because routes and DNS are system state.
+Dead volunteer servers fail over automatically; the reported exit IP is
+verified against the server you asked for.</p>
+
+<h2>Platform offices</h2>
+
+<p>A distinctive feature of vpnbox is office-relative exit targeting: 29
+platforms, 239 offices and 31 countries are geocoded via OpenStreetMap, and
+connections are ranked by distance tier, ping and speed.</p>
+
+<p><code>--site &lt;platform&gt;</code> targets a platform's primary HQ;
+<code>--office &lt;city&gt;</code> selects any other office;
+<code>--office all</code> picks the server nearest to any office worldwide.</p>
+
+<h2>Relevant considerations</h2>
+
 <ul>
-  <li>Fetches the live volunteer server list and ranks it by reachability</li>
-  <li>Connects through OpenVPN — full tunnel, leak-safe DNS via systemd-resolved</li>
+  <li>Volunteer servers change hourly — run <code>vpn refresh</code> before connecting.</li>
+  <li>Logging policy is set by each relay operator; VPN Gate publishes that field for every server.</li>
+  <li>There is no kill switch: if OpenVPN exits abnormally, traffic resumes
+    through your normal connection — impose a firewall policy (e.g. ufw allowing
+    outbound on the tunnel interface only) if that matters to you.</li>
 </ul>
 
-<p>Commands: <code>vpn</code> (menu), <code>vpn refresh</code>,
-<code>vpn countries</code>, <code>sudo vpn connect</code>, <code>vpn status</code>,
-<code>sudo vpn disconnect</code></p>
+<h2>Project</h2>
 
-<h2>Connect</h2>
-<ul>
-  <li><code>sudo vpn connect</code> — fastest server, anywhere</li>
-  <li><code>sudo vpn connect --country JP --city chiyoda</code> — pick country / city</li>
-  <li><code>sudo vpn connect --site meta --office all</code> — appear near a platform office</li>
-  <li><code>vpn status</code> / <code>sudo vpn disconnect</code></li>
-</ul>
-
-<h2>Links</h2>
-<p>
-  <a href="https://github.com/sajadinmaker/vpnbox">GitHub</a> ·
-  <a href="https://github.com/sajadinmaker/vpnbox/releases">Releases</a> ·
-  <a href="https://github.com/sajadinmaker/vpnbox/blob/main/README.md">Docs</a> ·
-  <a href="https://github.com/sajadinmaker/vpnbox/blob/main/LICENSE">License</a>
-</p>
+<dl>
+  <dt><a href="https://github.com/sajadinmaker/vpnbox">github.com/sajadinmaker/vpnbox</a></dt>
+  <dd>Source, README and issue tracker</dd>
+  <dt><a href="https://github.com/sajadinmaker/vpnbox/releases">releases</a></dt>
+  <dd>Tarballs with SHA256 checksums, published automatically by CI</dd>
+  <dt><a href="https://github.com/sajadinmaker/vpnbox/blob/main/LICENSE">license</a></dt>
+  <dd>MIT; VPN Gate attribution included</dd>
+</dl>
 
 <footer>
-  <code>sudo vpn connect</code> and you are somewhere else.<br>
-  Server list by the VPN Gate Academic Experiment, University of Tsukuba · MIT.
-  This page has no JavaScript and no tracking.
+  Server list and relay profiles by the VPN Gate Academic Experiment, University
+  of Tsukuba. Geocoding by OpenStreetMap/Nominatim; IP geolocation by ip-api.com.
+  vpnbox operates no servers of its own. This page is static — no JavaScript, no
+  tracking.
 </footer>
 
 </body>
