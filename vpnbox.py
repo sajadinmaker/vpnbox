@@ -47,7 +47,7 @@ import urllib.parse
 import urllib.request
 
 APP = "vpnbox"
-APP_VERSION = "1.0.0-beta"
+APP_VERSION = "1.0.0-beta5"
 UA = f"{APP}/{APP_VERSION} (linux; free public VPN client)"
 PID_FILE = "/run/vpnbox.pid"
 LOG_FILE = "/var/log/vpnbox.log"
