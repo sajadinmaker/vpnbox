@@ -234,7 +234,6 @@ class Intro(unittest.TestCase):
             self.assertIn("V", v.strip_ansi(lines[0]))
 
     def test_render_fits_any_terminal_width(self):
-        import re
         for width in (46, 64, 80, 110, 120, 160):
             with unittest.mock.patch.object(v, "tty_width", return_value=width):
                 text = v.intro_render(self.FAKE_SNAP, sel=0)
@@ -245,7 +244,6 @@ class Intro(unittest.TestCase):
     def test_status_panel_rewraps_with_the_screen(self):
         # responsive: narrow screens must stack the status facts, wide ones
         # may keep them on one row — no information, no overflow either way
-        fact = "Bengaluru, India · 96 live servers · 8 countries · list refreshed 5 min ago"
         narrow = v.intro_status_rows(self.FAKE_SNAP, limit=32)
         joined = " ".join(narrow)
         self.assertIn("Bengaluru", joined)

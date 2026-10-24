@@ -1161,7 +1161,7 @@ def cmd_connect(args):
     if os.geteuid() != 0 and not sudo_available():
         print(red("I do not have sudo privileges right now."))
         hint = f"sudo vpn connect {args.country or ''}".strip()
-        print(f"run it as:  " + bold(f"{hint} {('--city ' + args.city) if args.city else ''}".strip()))
+        print("run it as:  " + bold(f"{hint} {('--city ' + args.city) if args.city else ''}".strip()))
         return 2
 
     tries = sel[: args.max_tries]
