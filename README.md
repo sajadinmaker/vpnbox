@@ -2,7 +2,7 @@
 
 **A free VPN client for Linux.** No account, no key, no payment.
 
-`v1.0.0-beta` · one Python file, standard library only · built by
+`v1.0.0-beta5` · one Python file, standard library only · built by
 [sajadinmaker](https://github.com/sajadinmaker)
 
 vpnbox connects through the volunteer relays of
@@ -14,8 +14,8 @@ systemd-resolved.
 ## Install
 
 ```bash
-tar -xzf vpnbox-1.0.0-beta.tar.gz
-cd vpnbox-1.0.0-beta
+tar -xzf vpnbox-1.0.0-beta5.tar.gz
+cd vpnbox-1.0.0-beta5
 sudo ./install.sh
 ```
 
