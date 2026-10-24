@@ -21,8 +21,9 @@ rm -f "$PREFIX/bin/vpn"
 echo "removed: $PREFIX/bin/vpn"
 
 if [ "$PURGE" -eq 1 ]; then
-    rm -f /var/log/vpnbox.log /run/vpnbox.pid /var/tmp/vpnbox.meta
-    echo "runtime state purged (/var/log/vpnbox.log, /run/vpnbox.pid, /var/tmp/vpnbox.meta)"
+    rm -f /var/log/vpnbox.log /run/vpnbox.pid /var/tmp/vpnbox.meta \
+          /var/tmp/vpnbox.session.json
+    echo "runtime state purged (log, pid, meta, session tombstone)"
     echo "user caches kept in ~/.cache/vpnbox — delete manually if you want a fully clean slate"
 fi
 

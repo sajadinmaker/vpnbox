@@ -1334,8 +1334,7 @@ def kill_stale():
                          text=True)
     for pid in out.stdout.split():
         sudo_run(["kill", str(pid)])
-    deadline = time.time() + 6
-    while time.time() < deadline:
+    for _ in range(24):                            # up to 6 s of grace
         out = subprocess.run(["pgrep", "-f", CONF_FILE], capture_output=True,
                              text=True)
         if not out.stdout.strip():
