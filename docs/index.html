@@ -111,11 +111,13 @@ sudo vpn connect                     # fastest server, anywhere
 sudo vpn connect --country JP --city chiyoda
 sudo vpn connect --site meta --office all
 vpn status                           # exit IP and location
+sudo vpn watch                       # keep a session alive, auto-reconnect
 sudo vpn disconnect</pre>
 
 <p>Connections use <code>sudo</code> because routes and DNS are system state.
 Dead volunteer servers fail over automatically; the reported exit IP is
-verified against the server you asked for.</p>
+verified against the server you asked for. <code>vpn watch</code> re-establishes
+the same session if the daemon dies mid-session.</p>
 
 <h2>Platform offices</h2>
 

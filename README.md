@@ -34,11 +34,27 @@ Everything is a subcommand of `vpn`:
 | `sudo vpn connect` | Connects to the fastest server. |
 | `vpn status` | Shows the exit IP and its city. |
 | `sudo vpn disconnect` | Stops the tunnel and restores routes and DNS. |
+| `sudo vpn watch` | Keeps a connected session alive: reconnects if the tunnel dies. |
 
 Connecting needs `sudo` because routes and DNS policies are system state. If a
 server refuses to handshake, vpnbox fails fast and tries the next best
 candidate, up to three attempts (`--max-tries N`). Pin a specific server with
-`--index N` or skip a flaky one with `--skip N`.
+`--index N` or skip the first N ranked candidates with `--skip N`.
+
+## Keep a session alive
+
+Run `sudo vpn watch` right after `sudo vpn connect` (or attach it later) and
+leave the session running. If the daemon exits mid-session, the watchdog
+reconnects with the stored intent — the same country, city, office, transport —
+prints one line per event, and waits out repeated failures (30 s backoff, capped
+at 5 min). It stops after 3 failed recovery cycles (`--give-up n`), and
+Ctrl-C stops the watcher without touching the tunnel. `vpn disconnect` is always
+honored: the watchdog exits when you disconnect, even if it caught your
+disconnect in the middle of a recovery attempt.
+
+The detection rides on the OpenVPN channel itself: the daemon signals every
+10 s by default and exits when nothing answers for 60 s (`--ping`,
+`--ping-exit`; set `--ping-exit 0` to restore the old never-exit behavior).
 
 ## Pick a country, city, or transport
 

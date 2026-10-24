@@ -3,6 +3,30 @@
 All notable changes to vpnbox. The first stable will be `1.0.0`; the beta
 cycle uses `1.0.0-beta1`, `1.0.0-beta2`, …
 
+## unreleased — 2026-10-24
+
+### Added
+- **`vpn watch`**: supervise a connected session. If the OpenVPN daemon exits
+  mid-session, the watchdog reconnects with the stored intent (country, city,
+  site, office, transport), prints one line per event, and waits out repeated
+  failures with a 30 s backoff capped at 5 min (`--give-up n` bounds the
+  cycles, default 3). Ctrl-C stops the watcher, never the tunnel; a clean
+  `vpn disconnect` always wins.
+- **Dead-server detection** during the connect: the daemon pings the remote
+  every 10 s and exits when nothing answers for 60 s by default
+  (`--ping`, `--ping-exit`), so a dead volunteer server no longer leaves a
+  silent black-hole tunnel. `--ping-exit 0` restores the old behavior.
+
+### Fixed
+- `--skip N` was accepted and documented but never applied; it now removes the
+  first N ranked candidates before `--index`.
+- A disconnect running while `vpn watch` was mid-recovery could resurrect the
+  tunnel. `vpn disconnect` now records the end of the session on disk and the
+  watchdog honors it: it tears down any tunnel it just rebuilt and exits.
+- A failed connect attempt could leave an untracked OpenVPN daemon behind
+  (a relaunch overwrites the pid file). Every fresh connect and recovery now
+  sweeps the daemons bound to its config before launching a new one.
+
 ## 1.0.0-beta — 2026-10-20
 
 ### Added

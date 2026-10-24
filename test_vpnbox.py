@@ -3,7 +3,9 @@
 Run from the repo root:
     python3 -m unittest discover -s . -p "test_*.py" -v     (or: make test)
 """
+import contextlib
 import inspect
+import io
 import os
 import sys
 import unittest
@@ -318,6 +320,150 @@ class Intro(unittest.TestCase):
             s = v.intro_snapshot(fetch=False)
         self.assertFalse(s["connected"])
         self.assertIsInstance(s["servers"], int)
+
+
+class Watchdog(unittest.TestCase):
+    """vpn watch: session-intent file, dead-server detection, backoff."""
+
+    def setUp(self):
+        self._patch = unittest.mock.patch.object(
+            v, "SESSION_FILE", "/tmp/vpnbox-test-session.json")
+        self._patch.start()
+        self.addCleanup(self._patch.stop)
+        if os.path.exists(v.SESSION_FILE):
+            os.remove(v.SESSION_FILE)
+
+    def test_session_roundtrip(self):
+        v.save_session("JP", "chiyoda", "meta", "all", True, "tcp", 10, 60)
+        sess = v.load_session()
+        self.assertEqual(sess["country"], "JP")
+        self.assertEqual(sess["city"], "chiyoda")
+        self.assertEqual(sess["site"], "meta")
+        self.assertEqual(sess["office"], "all")
+        self.assertTrue(sess["nearest"])
+        self.assertEqual(sess["proto"], "tcp")
+        self.assertEqual(sess["ping"], 10)
+        self.assertEqual(sess["ping_exit"], 60)
+        self.assertIn("connected_at", sess)
+
+    def test_session_missing_or_garbage_is_none(self):
+        self.assertIsNone(v.load_session())
+        with open(v.SESSION_FILE, "w") as f:
+            f.write("{not json at all}")
+        self.assertIsNone(v.load_session())
+
+    def test_clear_session_leaves_a_tombstone(self):
+        v.save_session("JP", None, None, None, False, None, 10, 60)
+        v.clear_session()
+        sess = v.load_session()
+        # the marker must outlive the daemon teardown so a running watch
+        # honors the user's decision instead of resurrecting the tunnel
+        self.assertTrue(sess["stopped"])
+        self.assertGreater(sess["stopped_at"], 0)
+
+    def test_recovery_never_overrides_the_tombstone(self):
+        v.save_session("JP", None, None, None, False, None, 10, 60)
+        v.clear_session()
+        refused = v.save_session("JP", None, None, None, False, None, 10, 60,
+                                 recovery=True)
+        self.assertIsNone(refused)
+        self.assertTrue(v.load_session()["stopped"])
+
+    def test_user_connect_replaces_the_tombstone(self):
+        v.save_session("JP", None, None, None, False, None, 10, 60)
+        v.clear_session()
+        saved = v.save_session("CA", None, None, None, False, None, 10, 60,
+                               recovery=False)
+        self.assertEqual(saved["country"], "CA")
+        sess = v.load_session()
+        self.assertEqual(sess["country"], "CA")
+        self.assertFalse(sess.get("stopped", False))
+
+    def test_watch_honors_the_tombstone_at_start(self):
+        v.save_session("JP", None, None, None, False, None, 10, 60)
+        v.clear_session()
+        out = io.StringIO()
+        with unittest.mock.patch.object(v, "sudo_available", return_value=True), \
+             contextlib.redirect_stdout(out):
+            rc = v.cmd_watch(unittest.mock.Mock(give_up=3))
+        self.assertEqual(rc, 2)
+        self.assertIn("nothing to watch", out.getvalue())
+
+    def test_watch_takes_the_tunnel_down_for_a_late_tombstone(self):
+        v.save_session("JP", None, None, None, False, None, 10, 60)
+        v.clear_session()
+        with unittest.mock.patch.object(v, "sudo_available", return_value=True), \
+             contextlib.redirect_stdout(io.StringIO()), \
+             unittest.mock.patch.object(v, "running_pid", return_value=4242), \
+             unittest.mock.patch.object(v, "kill_pid") as killed:
+            rc = v.cmd_watch(unittest.mock.Mock(give_up=3))
+        self.assertEqual(rc, 0)
+        killed.assert_called_once_with(4242, quiet=True)
+
+    def test_kill_stale_sweeps_every_daemon(self):
+        sentinel = unittest.mock.Mock(stdout="111\n222\n", returncode=0)
+        kills = []
+        with unittest.mock.patch.object(v, "sudo_run",
+                                        lambda argv: kills.append(argv)), \
+             unittest.mock.patch.object(v.time, "sleep"), \
+             unittest.mock.patch.object(v.subprocess, "run",
+                                        return_value=sentinel):
+            v.kill_stale()
+        self.assertEqual(kills, [["kill", "111"], ["kill", "222"],
+                                 ["kill", "-9", "111"], ["kill", "-9", "222"]])
+
+    def test_build_conf_keeps_alive_pings(self):
+        conf = v.build_conf(server(), keepalive=(10, 60))
+        self.assertIn("\nping 10\n", conf)
+        self.assertIn("ping-exit 60\n", conf)
+        conf_zero = v.build_conf(server(), keepalive=(10, 0))
+        self.assertIn("\nping 10\n", conf_zero)
+        self.assertNotIn("ping-exit", conf_zero)
+        conf_off = v.build_conf(server(), keepalive=None)
+        self.assertNotIn("ping 10", conf_off)
+
+    def test_session_namespace_maps_intent(self):
+        v.save_session("JP", "chiyoda", None, None, False, "tcp", 5, 45)
+        a = v.session_namespace(v.load_session())
+        self.assertEqual(a.country_pos, "JP")
+        self.assertIsNone(a.country_opt)
+        self.assertEqual(a.city, "chiyoda")
+        self.assertEqual(a.proto, "tcp")
+        self.assertEqual((a.ping, a.ping_exit), (5, 45))
+        self.assertIsNone(a.index)
+        self.assertEqual(a.skip, 0)
+        self.assertEqual(a.max_tries, 3)
+        self.assertTrue(a.recovery, "recovery connects must refuse to save over a tombstone")
+
+    def test_session_namespace_defaults_when_fields_missing(self):
+        a = v.session_namespace({"country": "JP"})
+        self.assertEqual((a.ping, a.ping_exit), (v.PING_DEFAULT,
+                                                 v.PING_EXIT_DEFAULT))
+        self.assertFalse(a.nearest)
+
+    def test_check_ping_settings(self):
+        ns = lambda p, e: unittest.mock.Mock(ping=p, ping_exit=e)
+        v.check_ping_settings(ns(10, 60))          # fine
+        v.check_ping_settings(ns(10, 0))           # exit disabled: fine
+        with self.assertRaises(SystemExit):
+            v.check_ping_settings(ns(60, 60))
+
+    def test_backoff_is_exponential_with_cap(self):
+        self.assertEqual([v.backoff_seconds(n) for n in (1, 2, 3, 4, 5, 6)],
+                         [30, 60, 120, 240, 300, 300])
+
+    def test_connect_applies_skip(self):
+        sel = [server(ip="1.1.1.1"), server(ip="2.2.2.2"), server(ip="3.3.3.3")]
+        skipped = sel[1:]
+        self.assertEqual([r["ip"] for r in skipped], ["2.2.2.2", "3.3.3.3"])
+        # and the parser really wires --skip/--ping/--ping-exit and watch
+        bp = v.build_parser()
+        connect = bp.parse_args(["connect"])
+        self.assertEqual(connect.skip, 0)
+        self.assertEqual((connect.ping, connect.ping_exit), (10, 60))
+        watch = bp.parse_args(["watch", "--give-up", "7"])
+        self.assertEqual(watch.give_up, 7)
+        self.assertIs(watch.fn, v.cmd_watch)
 
 
 if __name__ == "__main__":
