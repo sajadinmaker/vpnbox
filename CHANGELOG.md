@@ -3,7 +3,7 @@
 All notable changes to vpnbox. The first stable will be `1.0.0`; the beta
 cycle uses `1.0.0-beta1`, `1.0.0-beta2`, …
 
-## unreleased — 2026-10-24
+## 1.0.0-beta5 — 2026-10-24
 
 ### Added
 - **`vpn watch`**: supervise a connected session. If the OpenVPN daemon exits
