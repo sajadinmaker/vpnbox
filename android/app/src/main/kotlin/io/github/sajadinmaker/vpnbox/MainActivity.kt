@@ -4,6 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.Crossfade
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -31,36 +32,38 @@ class MainActivity : ComponentActivity() {
                 val countries by vm.countries.collectAsState()
                 var picking by remember { mutableStateOf(false) }
 
-                if (screen == Screen.TERMINAL) {
-                    TerminalScreen(
-                        ui = terminal,
-                        onBack = { vm.dismissAndGoHome() },
-                        onKill = { vm.killTunnel() },
-                    )
-                } else {
-                    HomeScreen(
-                        ui = home,
-                        onAction = { action ->
-                            when (action) {
-                                HomeAction.ConnectFast -> vm.connect(null, null)
-                                HomeAction.PickCountry -> {
-                                    vm.rebuildCountries()
-                                    picking = true
-                                }
-                                HomeAction.Refresh -> vm.refresh()
-                                HomeAction.Disconnect -> vm.disconnect()
-                            }
-                        },
-                    )
-                    if (picking) {
-                        CountrySheet(
-                            countries = countries,
-                            onPick = { pick ->
-                                picking = false
-                                vm.connect(pick.cc, null)
-                            },
-                            onDismiss = { picking = false },
+                Crossfade(targetState = screen, label = "screen") { s ->
+                    if (s == Screen.TERMINAL) {
+                        TerminalScreen(
+                            ui = terminal,
+                            onBack = { vm.dismissAndGoHome() },
+                            onKill = { vm.killTunnel() },
                         )
+                    } else {
+                        HomeScreen(
+                            ui = home,
+                            onAction = { action ->
+                                when (action) {
+                                    HomeAction.ConnectFast -> vm.connect(null, null)
+                                    HomeAction.PickCountry -> {
+                                        vm.rebuildCountries()
+                                        picking = true
+                                    }
+                                    HomeAction.Refresh -> vm.refresh()
+                                    HomeAction.Disconnect -> vm.disconnect()
+                                }
+                            },
+                        )
+                        if (picking) {
+                            CountrySheet(
+                                countries = countries,
+                                onPick = { pick ->
+                                    picking = false
+                                    vm.connect(pick.cc, null)
+                                },
+                                onDismiss = { picking = false },
+                            )
+                        }
                     }
                 }
             }

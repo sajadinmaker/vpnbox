@@ -1,6 +1,6 @@
 # android/ — vpnbox app
 
-Compose app port of the `vpnbox` CLI. Same data semantics, same aesthetic.
+Compose app port of the `vpnbox` CLI. Same data semantics, Material 3 UI.
 
 ## Status
 
@@ -8,10 +8,11 @@ Compose app port of the `vpnbox` CLI. Same data semantics, same aesthetic.
   ordering, `select_servers()` narrowing, `check_ping_settings()`, `validate_args()`,
   `backoff_seconds()` (30 s doubling, 300 s cap), atomic cache/session writes,
   disconnect tombstones. Covered by JVM unit tests (`./gradlew testDebugUnitTest`).
-- **UI**: the reel's language — pixel wordmark band, terminal panel with
-  traffic lights and right tag, `● connected` status rows, ▸+number action
-  rows, chips `connect → watch → kill → recovered`, segment progress bar,
-  caption blocks (`04 · RECOVER / Back in 4 seconds`).
+- **UI**: Material 3 (dark, brand-red primary) — Scaffold + TopAppBar navigation,
+  status hero card (green secondary-container state when connected), metric stat
+  cards, icon list-row actions, message banners, animated screen transitions,
+  M3 log card, linear progress, and standard buttons. The reel-era pixel
+  wordmark survives in the launcher icon only.
 - **Engine seam**: `TunnelEngine` interface. Today `SimulatedEngine` drives the
   UI (real pacing, kill/recovery cycles reachable from the chips row).
   `VpnboxVpnService` (manifest-registered, specialUse foreground) is the

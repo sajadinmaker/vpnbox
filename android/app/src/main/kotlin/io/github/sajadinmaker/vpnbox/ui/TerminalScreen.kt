@@ -1,26 +1,38 @@
 package io.github.sajadinmaker.vpnbox.ui
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.systemBarsPadding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -28,175 +40,170 @@ import androidx.compose.ui.unit.sp
 import io.github.sajadinmaker.vpnbox.TerminalLine
 import io.github.sajadinmaker.vpnbox.TerminalUi
 import io.github.sajadinmaker.vpnbox.WatchPhase
-import io.github.sajadinmaker.vpnbox.ui.theme.Bg
-import io.github.sajadinmaker.vpnbox.ui.theme.ChipBg
-import io.github.sajadinmaker.vpnbox.ui.theme.ChipBorder
-import io.github.sajadinmaker.vpnbox.ui.theme.Dim
-import io.github.sajadinmaker.vpnbox.ui.theme.Green
-import io.github.sajadinmaker.vpnbox.ui.theme.PanelBorder
-import io.github.sajadinmaker.vpnbox.ui.theme.Red
-import io.github.sajadinmaker.vpnbox.ui.theme.White
-import io.github.sajadinmaker.vpnbox.ui.theme.Yellow
 
-private val phaseCaption: Map<WatchPhase, Pair<String, String>> = mapOf(
-    WatchPhase.CONNECT to Pair("01 · CONNECT", "Fastest volunteer relay"),
-    WatchPhase.WATCH to Pair("02 · WATCH", "The watchdog has the intent"),
-    WatchPhase.KILL to Pair("04 · RECOVER", "Back in 4 seconds"),
-    WatchPhase.RECOVERED to Pair("04 · RECOVERED", "No human needed"),
-    WatchPhase.FAILED to Pair("× FAILURE", "Volunteer servers churn — refresh"),
-)
-
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TerminalScreen(
-    ui: TerminalUi,
-    onBack: () -> Unit,
-    onKill: () -> Unit,
-) {
-    val (kicker, headline) = phaseCaption.getValue(ui.phase)
-    val autoScroll = rememberScrollState()
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Bg)
-            .systemBarsPadding()
-            .padding(horizontal = 18.dp),
-    ) {
-        Spacer(Modifier.height(20.dp))
-        VpnboxLogo(width = 210.dp)
-        Spacer(Modifier.height(14.dp))
-        PanelChrome(
-            title = "vpnbox · watch",
-            tag = when (ui.phase) {
-                WatchPhase.RECOVERED -> "RECOVERED"
-                WatchPhase.FAILED -> "DOWN"
-                else -> "REAL ENGINE"
-            },
-            modifier = Modifier.weight(1f),
+fun TerminalScreen(ui: TerminalUi, onBack: () -> Unit, onKill: () -> Unit) {
+    val scroll = rememberScrollState()
+    LaunchedEffect(ui.lines.size) {
+        runCatching { scroll.animateScrollTo(scroll.maxValue) }
+    }
+    Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
+        topBar = {
+            TopAppBar(
+                title = { Text("Live session") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                actions = {
+                    Text(
+                        phaseTag(ui.phase),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(end = 16.dp),
+                    )
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
+            )
+        },
+    ) { pad ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(pad)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            LaunchedEffect(ui.lines.size) {
-                autoScroll.scrollTo(autoScroll.maxValue)
-            }
-            Column(
+            Card(
                 modifier = Modifier
-                    .verticalScroll(autoScroll),
-                verticalArrangement = Arrangement.spacedBy(3.dp),
+                    .fillMaxWidth()
+                    .weight(1f),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                ),
             ) {
-                for (l in ui.lines) TerminalRow(l)
+                Column(Modifier.fillMaxSize().padding(14.dp)) {
+                    Column(
+                        modifier = Modifier.verticalScroll(scroll),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        for (l in ui.lines) {
+                            Text(
+                                l.text,
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 12.sp,
+                                lineHeight = 16.sp,
+                                color = tone(l.tone),
+                            )
+                        }
+                    }
+                }
             }
-        }
-        Spacer(Modifier.height(16.dp))
-        Text(
-            kicker,
-            fontFamily = FontFamily.Monospace,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.SemiBold,
-            letterSpacing = 2.sp,
-            color = if (ui.phase == WatchPhase.FAILED) Red else Red,
-        )
-        Spacer(Modifier.height(4.dp))
-        Text(headline, fontSize = 30.sp, fontWeight = FontWeight.Bold,
-             color = if (ui.phase == WatchPhase.FAILED) Dim else White)
-        Spacer(Modifier.height(14.dp))
-        ChipsRow(ui.phase, onBack, onKill)
-        Spacer(Modifier.height(12.dp))
-        ProgressBar(fraction = when (ui.phase) {
-            WatchPhase.CONNECT -> 0.33f
-            WatchPhase.WATCH -> 0.66f
-            WatchPhase.KILL -> 0.8f
-            WatchPhase.RECOVERED, WatchPhase.FAILED -> 1f
-        })
-        Spacer(Modifier.height(10.dp))
-        Text(
-            "vpnbox",
-            fontFamily = FontFamily.Monospace, fontSize = 10.sp, color = Dim,
-        )
-        Spacer(Modifier.height(14.dp))
-    }
-}
-
-@Composable
-private fun TerminalRow(l: TerminalLine) {
-    val color = when (l.tone) {
-        TerminalLine.Tone.OK -> Green
-        TerminalLine.Tone.WARN -> Yellow
-        TerminalLine.Tone.ERR -> Red
-        TerminalLine.Tone.ACCENT -> White
-        TerminalLine.Tone.PLAIN -> Dim
-    }
-    Text(
-        l.text,
-        fontFamily = FontFamily.Monospace,
-        fontSize = 11.sp,
-        lineHeight = 15.sp,
-        color = color,
-    )
-}
-
-@Composable
-private fun ChipsRow(phase: WatchPhase, onBack: () -> Unit, onKill: () -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        Chip("connect", if (phase != WatchPhase.CONNECT) Dim else White,
-             bold = false, modifier = Modifier.weight(1f), onClick = onBack)
-        Chip("watch", if (phase == WatchPhase.KILL) Yellow else Dim,
-             bold = phase == WatchPhase.KILL,
-             modifier = Modifier.weight(1f))
-        Chip("kill", Dim, bold = phase == WatchPhase.KILL,
-             modifier = Modifier.weight(1f), onClick = if (phase == WatchPhase.WATCH) onKill else null)
-        val (label, color) = when (phase) {
-            WatchPhase.RECOVERED -> "recovered" to Green
-            WatchPhase.FAILED -> "failed" to Red
-            else -> "—" to Dim
-        }
-        Chip(label, color, bold = phase == WatchPhase.RECOVERED,
-             modifier = Modifier.weight(1f))
-    }
-}
-
-@Composable
-private fun Chip(
-    label: String,
-    color: androidx.compose.ui.graphics.Color,
-    bold: Boolean,
-    modifier: Modifier = Modifier,
-    onClick: (() -> Unit)? = null,
-) {
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(18.dp))
-            .background(ChipBg)
-            .padding(horizontal = 10.dp, vertical = 8.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            label,
-            fontFamily = FontFamily.Monospace,
-            fontSize = 12.sp,
-            fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal,
-            color = color,
-            modifier = if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier,
-        )
-    }
-}
-
-@Composable
-private fun ProgressBar(fraction: Float) {
-    Column {
-        Row(horizontalArrangement = Arrangement.SpaceBetween,
-            modifier = Modifier.fillMaxWidth()) {
-            for (i in 0 until 20) {
-                val on = (i + 1) / 20f <= fraction
-                Box(
-                    Modifier
-                        .height(3.dp)
-                        .weight(1f)
-                        .padding(horizontal = 1.dp)
-                        .background(if (on) Red else PanelBorder,
-                                    RoundedCornerShape(2.dp)),
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    phaseKicker(ui.phase),
+                    style = MaterialTheme.typography.labelLarge,
+                    letterSpacing = 1.5.sp,
+                    color = kickerColor(ui.phase),
+                )
+                Text(
+                    phaseHeadline(ui.phase),
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = if (ui.phase == WatchPhase.FAILED) MaterialTheme.colorScheme.onSurfaceVariant
+                    else MaterialTheme.colorScheme.onSurface,
                 )
             }
+            if (ui.phase == WatchPhase.CONNECT) {
+                LinearProgressIndicator(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(6.dp)
+                        .clip(RoundedCornerShape(4.dp)),
+                    strokeCap = StrokeCap.Round,
+                )
+            } else {
+                LinearProgressIndicator(
+                    progress = { fraction(ui.phase) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(6.dp)
+                        .clip(RoundedCornerShape(4.dp)),
+                    color = if (ui.phase == WatchPhase.FAILED) MaterialTheme.colorScheme.error
+                    else MaterialTheme.colorScheme.primary,
+                    strokeCap = StrokeCap.Round,
+                )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                FilledTonalButton(
+                    onClick = onBack,
+                    modifier = Modifier.weight(1f),
+                ) { Text("Back") }
+                OutlinedButton(
+                    onClick = onKill,
+                    enabled = ui.phase == WatchPhase.WATCH,
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error,
+                    ),
+                    modifier = Modifier.weight(1f),
+                ) { Text("Kill tunnel") }
+            }
         }
     }
+}
+
+private fun phaseTag(p: WatchPhase) = when (p) {
+    WatchPhase.CONNECT -> "CONNECTING"
+    WatchPhase.WATCH -> "PROTECTED"
+    WatchPhase.KILL -> "RECOVERING"
+    WatchPhase.RECOVERED -> "RECOVERED"
+    WatchPhase.FAILED -> "DOWN"
+}
+
+private fun phaseKicker(p: WatchPhase) = when (p) {
+    WatchPhase.CONNECT -> "01 · CONNECT"
+    WatchPhase.WATCH -> "02 · WATCH"
+    WatchPhase.KILL -> "03 · RECOVER"
+    WatchPhase.RECOVERED -> "04 · RECOVERED"
+    WatchPhase.FAILED -> "× FAILED"
+}
+
+private fun phaseHeadline(p: WatchPhase) = when (p) {
+    WatchPhase.CONNECT -> "Establishing the tunnel…"
+    WatchPhase.WATCH -> "You're protected"
+    WatchPhase.KILL -> "Tunnel dropped — recovering automatically"
+    WatchPhase.RECOVERED -> "Back up — no human needed"
+    WatchPhase.FAILED -> "All attempts failed — refresh and retry"
+}
+
+@Composable
+private fun kickerColor(p: WatchPhase): Color = when (p) {
+    WatchPhase.FAILED -> MaterialTheme.colorScheme.error
+    WatchPhase.KILL -> MaterialTheme.colorScheme.tertiary
+    WatchPhase.RECOVERED -> MaterialTheme.colorScheme.secondary
+    else -> MaterialTheme.colorScheme.primary
+}
+
+private fun fraction(p: WatchPhase): Float = when (p) {
+    WatchPhase.WATCH -> 0.66f
+    WatchPhase.KILL -> 0.8f
+    WatchPhase.RECOVERED, WatchPhase.FAILED -> 1f
+    else -> 0.33f
+}
+
+@Composable
+private fun tone(t: TerminalLine.Tone): Color = when (t) {
+    TerminalLine.Tone.OK -> MaterialTheme.colorScheme.secondary
+    TerminalLine.Tone.WARN -> MaterialTheme.colorScheme.tertiary
+    TerminalLine.Tone.ERR -> MaterialTheme.colorScheme.error
+    TerminalLine.Tone.ACCENT -> MaterialTheme.colorScheme.onSurface
+    TerminalLine.Tone.PLAIN -> MaterialTheme.colorScheme.onSurfaceVariant
 }
