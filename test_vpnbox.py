@@ -592,6 +592,55 @@ class Regressions(unittest.TestCase):
         with self.assertRaises(SystemExit):
             v.cmd_watch(unittest.mock.Mock(give_up=0))
 
+    def test_disconnect_sweeps_untracked_daemons(self):
+        """A daemon can outlive its pid file; disconnect must never print
+        'not connected (cleaned any leftovers)' while openvpn still runs."""
+        kills = []
+        out = io.StringIO()
+        with unittest.mock.patch.object(v, "running_pid", return_value=None), \
+             unittest.mock.patch.object(v, "sudo_available", return_value=True), \
+             unittest.mock.patch.object(v, "clear_meta"), \
+             unittest.mock.patch.object(v, "clear_session"), \
+             unittest.mock.patch.object(v, "_vpn_pids",
+                                        side_effect=[["4242"], []]), \
+             unittest.mock.patch.object(
+                 v, "sudo_run",
+                 side_effect=lambda argv: kills.append(argv)), \
+             unittest.mock.patch.object(
+                 v.subprocess, "run",
+                 return_value=unittest.mock.Mock(returncode=0)), \
+             unittest.mock.patch.object(v.time, "sleep"), \
+             contextlib.redirect_stdout(out):
+            rc = v.cmd_disconnect(argparse.Namespace())
+        self.assertEqual(rc, 0)
+        self.assertIn(["kill", "4242"], kills)
+
+    def test_readline_eof_stops_instead_of_busy_looping(self):
+        """A detached terminal yields EOF (os.read -> b''); the raw-mode
+        loop must return, not spin forever at 100% CPU."""
+        import termios
+        import tty as _tty
+        fake_term = [0, 0, 0, 0, 0, 0]
+        with unittest.mock.patch.object(v, "_drain_stdin"), \
+             unittest.mock.patch.object(v.time, "sleep"), \
+             unittest.mock.patch.object(termios, "tcgetattr",
+                                        return_value=fake_term), \
+             unittest.mock.patch.object(termios, "tcsetattr"), \
+             unittest.mock.patch.object(_tty, "setraw"), \
+             unittest.mock.patch.object(os, "read", return_value=b""):
+            self.assertIsNone(v._readline("> "))
+
+    def test_sudo_run_survives_a_missing_sudo_binary(self):
+        """No sudo executable must surface as rc 127 for call sites to
+        handle, never as an unhandled FileNotFoundError."""
+        def missing_sudo(argv, **k):
+            raise FileNotFoundError("[Errno 2] No such file: 'sudo'")
+
+        with unittest.mock.patch.object(v.subprocess, "run",
+                                        side_effect=missing_sudo):
+            rc = v.sudo_run(["true"])
+        self.assertEqual(rc.returncode, 127)
+
 
 if __name__ == "__main__":
     unittest.main()

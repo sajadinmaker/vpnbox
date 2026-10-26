@@ -828,9 +828,16 @@ def sudo_available() -> bool:
 
 
 def sudo_run(argv):
-    if os.geteuid() == 0:
-        return subprocess.run(argv)
-    return subprocess.run(["sudo", "-n"] + argv)
+    """Run a command under sudo (a no-op under root). A missing sudo binary
+    must surface as rc 127 — every call site checks returncode, and an
+    unhandled FileNotFoundError would crash teardown mid-flight."""
+    try:
+        if os.geteuid() == 0:
+            return subprocess.run(argv)
+        return subprocess.run(["sudo", "-n"] + argv)
+    except FileNotFoundError:
+        return subprocess.CompletedProcess(argv, 127, "",
+                                           "sudo: executable not found")
 
 
 def launch(r, keepalive=(PING_DEFAULT, PING_EXIT_DEFAULT)):
@@ -1504,9 +1511,15 @@ def cmd_disconnect(args):
         if not stopped:
             print(red("the tunnel could not be stopped — run: sudo vpn disconnect"))
             return 2
+        return 0
     else:
         clear_meta()
         clear_session()
+        # a missing pid file does not prove the tunnel is gone — a daemon
+        # launched with our marker can outlive its pid file. "not connected"
+        # must never be printed while openvpn still routes this machine's
+        # traffic, so sweep anything bound to the marker before declaring done
+        kill_stale()
         # also clean forgotten files
         rm = ["rm", "-f", PID_FILE, CONF_FILE, LEGACY_CONF_FILE]
         if os.geteuid() == 0:
@@ -1516,6 +1529,7 @@ def cmd_disconnect(args):
             subprocess.run(["sudo", "-n"] + rm, stdout=subprocess.DEVNULL,
                            stderr=subprocess.DEVNULL)
         print("not connected (cleaned any leftovers)")
+        return 0
 
 
 def cmd_status(args):
@@ -1991,7 +2005,11 @@ def _readline(prompt, allow_esc=True):
     try:
         while True:
             b = os.read(fd, 1)
-            ch = b.decode("utf-8", "replace") if b else ""
+            if not b:                         # EOF: terminal went away
+                out.write("\n")
+                out.flush()
+                return None                   # stop — never busy-loop on EOF
+            ch = b.decode("utf-8", "replace")
             if ch in ("\r", "\n"):           # commit a DEFAULT, never a bail
                 out.write("\n")
                 out.flush()

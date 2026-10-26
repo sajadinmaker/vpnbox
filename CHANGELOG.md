@@ -25,6 +25,13 @@ cycle uses `1.0.0-beta1`, `1.0.0-beta2`, …
   `countries`, `servers`, or `connect`.
 - `vpn status` no longer shows an age measured from 1970 when the metadata
   file is missing.
+- A daemon can no longer survive `vpn disconnect` with its pid file lost:
+  the cleanup path now sweeps any openvpn still bound to the pid marker
+  before reporting "not connected".
+- A sudo binary that is missing entirely now surfaces as exit code 127 with
+  a readable message instead of an unhandled traceback mid-teardown.
+- The interactive prompts stop instead of spinning on a detached terminal
+  (EOF in raw mode used to busy-loop).
 
 ### Changed
 - The tunnel profile, session intent, and metadata now live in a private
