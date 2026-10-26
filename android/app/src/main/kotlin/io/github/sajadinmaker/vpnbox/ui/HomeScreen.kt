@@ -66,26 +66,28 @@ fun HomeScreen(
             title = "vpnbox · live tunnel",
             tag = if (ui.connected) "ONLINE" else "STANDBY",
         ) {
-            HomeStatusRows(ui)
-            Spacer(Modifier.height(12.dp))
-            for (a in actions) ActionRow(a, enabled = a.enabled) {
-                onAction(when (a.num) {
-                    "1" -> HomeAction.ConnectFast
-                    "2" -> HomeAction.PickCountry
-                    "3" -> HomeAction.Refresh
-                    else -> HomeAction.Disconnect
-                })
-            }
-            if (ui.message.isNotBlank()) {
-                Spacer(Modifier.height(10.dp))
-                Text(
-                    ui.message,
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 11.sp,
-                    color = if (ui.message.startsWith("refresh failed")) Red
-                            else if (ui.message.startsWith("refreshed")) Green
-                            else Dim,
-                )
+            Column {
+                HomeStatusRows(ui)
+                Spacer(Modifier.height(12.dp))
+                for (a in actions) ActionRow(a, enabled = a.enabled) {
+                    onAction(when (a.num) {
+                        "1" -> HomeAction.ConnectFast
+                        "2" -> HomeAction.PickCountry
+                        "3" -> HomeAction.Refresh
+                        else -> HomeAction.Disconnect
+                    })
+                }
+                if (ui.message.isNotBlank()) {
+                    Spacer(Modifier.height(10.dp))
+                    Text(
+                        ui.message,
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 11.sp,
+                        color = if (ui.message.startsWith("refresh failed")) Red
+                                else if (ui.message.startsWith("refreshed")) Green
+                                else Dim,
+                    )
+                }
             }
         }
         Spacer(Modifier.weight(1f))

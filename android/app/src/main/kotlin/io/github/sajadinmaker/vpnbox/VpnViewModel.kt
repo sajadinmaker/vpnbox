@@ -1,5 +1,7 @@
 package io.github.sajadinmaker.vpnbox
 
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.github.sajadinmaker.vpnbox.data.CacheStore
@@ -17,11 +19,13 @@ import io.github.sajadinmaker.vpnbox.data.validateArgs
 import io.github.sajadinmaker.vpnbox.engine.EngineEvent
 import io.github.sajadinmaker.vpnbox.engine.SimulatedEngine
 import java.io.File
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 enum class Screen { HOME, TERMINAL }
 
@@ -50,10 +54,10 @@ data class TerminalUi(
     val cycles: Int = 3,
 )
 
-class VpnViewModel(
-    filesDir: File,
-    private val engine: SimulatedEngine = SimulatedEngine(),
-) : ViewModel() {
+class VpnViewModel(app: Application) : AndroidViewModel(app) {
+
+    private val engine = SimulatedEngine()
+    private val filesDir: File = app.getExternalFilesDir(null) ?: app.filesDir
 
     private val cacheStore = CacheStore(File(filesDir, "servers.json"))
     private val sessionStore = SessionStore(File(filesDir, "session.json"))
@@ -97,7 +101,7 @@ class VpnViewModel(
 
     private fun refreshGeoLabel() {
         viewModelScope.launch {
-            val g = VpnGate.fetchGeo() ?: return@launch
+            val g = withContext(Dispatchers.IO) { VpnGate.fetchGeo() } ?: return@launch
             val where = listOf(g["city"], g["regionName"], g["country"])
                 .filter { !it.isNullOrBlank() }.joinToString(", ")
             home.update {
@@ -110,7 +114,8 @@ class VpnViewModel(
 
     fun refresh() {
         connectJob?.cancel()
-        connectJob = viewModelScope.launch {
+        // blocking network I/O — keep it off the main thread
+        connectJob = viewModelScope.launch(Dispatchers.IO) {
             home.update { it.copy(message = "refreshing the live server list …") }
             try {
                 val text = VpnGate.fetchListText()
@@ -150,7 +155,9 @@ class VpnViewModel(
         terminal.value = TerminalUi(phase = WatchPhase.CONNECT)
         intent = null
         connectJob?.cancel()
-        connectJob = viewModelScope.launch {
+        // the whole connect path (fetch, parse, enrich, engine delays) is
+        // blocking/network work — off the main thread, like launch() in the CLI
+        connectJob = viewModelScope.launch(Dispatchers.IO) {
             try {
                 val ping = 10
                 val exit = checkPingSettings(ping, 60)
@@ -185,8 +192,9 @@ class VpnViewModel(
                     terminal.update { it.copy(phase = WatchPhase.FAILED) }
                     return@launch
                 }
-                for ((i, r) in sel.take(3).withIndex()) {
-                    attemptLine(i, sel.size, r)
+                val triesN = minOf(sel.size, 3)
+                for ((i, r) in sel.take(triesN).withIndex()) {
+                    attemptLine(i, triesN, r)
                     if (engine.start(r, keepalive = Pair(ping, exit)).isSuccess) {
                         succeed(r, country, city, exit)
                         startWatchLoop(country, city, exit)

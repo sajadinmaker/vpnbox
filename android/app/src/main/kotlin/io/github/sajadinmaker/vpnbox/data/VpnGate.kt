@@ -80,7 +80,8 @@ object VpnGate {
         } catch (e: VpnGateError) {
             throw e
         } catch (e: Exception) {
-            throw VpnGateError("network error for $url: ${e.message}")
+            throw VpnGateError("network error for $url: " +
+                "${e.javaClass.simpleName}: ${e.message}")
         } finally {
             conn.disconnect()
         }
@@ -94,11 +95,13 @@ object VpnGate {
                 val text = httpGet(url).toString(Charsets.UTF_8)
                 if (HOSTNAME_HEADER in text) return text
             } catch (e: Exception) {
+                android.util.Log.e("vpnbox", "fetch $url failed", e)
                 lastErr = e
             }
         }
         throw VpnGateError(
-            "could not fetch the VPN Gate list (${lastErr?.message}). " +
+            "could not fetch the VPN Gate list " +
+                "(${lastErr?.javaClass?.simpleName}: ${lastErr?.message}). " +
                 "Try again later.")
     }
 

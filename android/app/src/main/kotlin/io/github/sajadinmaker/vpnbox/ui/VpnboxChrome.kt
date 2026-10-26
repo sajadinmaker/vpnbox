@@ -46,7 +46,8 @@ private val PIXEL_FONT = mapOf(
 /** The red band logo: white pixel VPNBOX on red, like the video's header. */
 @Composable
 fun VpnboxLogo(width: Dp = 264.dp) {
-    val cell = width / 30f   // 6 letters x 5 cells = 30 wide
+    // 6 letters x (5 cells + 1 spacing) = 36 columns
+    val cell = width / 36f
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(6.dp))

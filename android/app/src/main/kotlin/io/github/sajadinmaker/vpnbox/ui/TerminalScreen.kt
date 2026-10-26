@@ -65,7 +65,7 @@ fun TerminalScreen(
         VpnboxLogo(width = 210.dp)
         Spacer(Modifier.height(14.dp))
         PanelChrome(
-            title = "vpnbox · watch — live session",
+            title = "vpnbox · watch",
             tag = when (ui.phase) {
                 WatchPhase.RECOVERED -> "RECOVERED"
                 WatchPhase.FAILED -> "DOWN"
