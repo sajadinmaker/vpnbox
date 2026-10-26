@@ -3,6 +3,35 @@
 All notable changes to vpnbox. The first stable will be `1.0.0`; the beta
 cycle uses `1.0.0-beta1`, `1.0.0-beta2`, …
 
+## Unreleased
+
+### Fixed
+- `vpn status --no-ip` no longer prints your unprotected address while the
+  tunnel is down. The flag now suppresses the lookup in every state.
+- A failed public-IP lookup no longer turns a successful connect, or a
+  status read, into a crashed command.
+- `vpn disconnect` reports the failure and exits 2 when the daemon could not
+  be stopped, instead of printing `openvpn stopped`.
+- A disconnect writes the end-of-session marker before tearing the tunnel
+  down, so a slow teardown can no longer race `vpn watch` into resurrecting
+  the tunnel.
+- `--skip`, `--index`, `--max-tries`, `--give-up`, `--ping`, and `--limit`
+  reject values that selected no servers or emitted an invalid profile.
+- `vpn watch` gives up immediately after the final failed recovery cycle
+  instead of waiting out the full backoff first.
+- A failed refresh from the interactive menu returns to the menu instead of
+  closing the UI.
+- Corrupt server caches are ignored and refreshed instead of crashing
+  `countries`, `servers`, or `connect`.
+- `vpn status` no longer shows an age measured from 1970 when the metadata
+  file is missing.
+
+### Changed
+- The tunnel profile, session intent, and metadata now live in a private
+  runtime directory (`/run/vpnbox` when invoked as root, the user's runtime
+  directory otherwise) instead of world-writable `/tmp` and `/var/tmp`.
+  Legacy paths are still read so an upgrade keeps existing state.
+
 ## 1.0.0-beta5 — 2026-10-24
 
 ### Added

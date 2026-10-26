@@ -3,11 +3,14 @@
 Run from the repo root:
     python3 -m unittest discover -s . -p "test_*.py" -v     (or: make test)
 """
+import argparse
 import contextlib
 import inspect
 import io
 import os
+import stat
 import sys
+import tempfile
 import unittest
 import unittest.mock
 
@@ -330,8 +333,13 @@ class Watchdog(unittest.TestCase):
             v, "SESSION_FILE", "/tmp/vpnbox-test-session.json")
         self._patch.start()
         self.addCleanup(self._patch.stop)
-        if os.path.exists(v.SESSION_FILE):
-            os.remove(v.SESSION_FILE)
+        self._legacy = unittest.mock.patch.object(
+            v, "LEGACY_SESSION_FILE", "/tmp/vpnbox-test-session-legacy.json")
+        self._legacy.start()
+        self.addCleanup(self._legacy.stop)
+        for path in (v.SESSION_FILE, v.LEGACY_SESSION_FILE):
+            if os.path.exists(path):
+                os.remove(path)
 
     def test_session_roundtrip(self):
         v.save_session("JP", "chiyoda", "meta", "all", True, "tcp", 10, 60)
@@ -464,6 +472,125 @@ class Watchdog(unittest.TestCase):
         watch = bp.parse_args(["watch", "--give-up", "7"])
         self.assertEqual(watch.give_up, 7)
         self.assertIs(watch.fn, v.cmd_watch)
+
+
+class Regressions(unittest.TestCase):
+    """Bugs found in the post-beta5 audit."""
+
+    def test_fetch_geo_never_raises(self):
+        import urllib.error
+        for boom in (urllib.error.URLError("offline"), ValueError("bad json"),
+                     OSError("boom")):
+            with unittest.mock.patch.object(v, "http_get", side_effect=boom):
+                self.assertIsNone(v.fetch_geo())
+
+    def test_status_no_ip_hides_the_address_when_disconnected(self):
+        out = io.StringIO()
+        with unittest.mock.patch.object(v, "running_pid", return_value=None), \
+             unittest.mock.patch.object(v, "read_meta", return_value=None), \
+             unittest.mock.patch.object(v, "fetch_geo",
+                                        side_effect=AssertionError("lookup")), \
+             contextlib.redirect_stdout(out):
+            rc = v.cmd_status(argparse.Namespace(no_ip=True))
+        self.assertEqual(rc, 0)
+        self.assertEqual(out.getvalue().strip(), "not connected")
+
+    def test_status_without_meta_does_not_show_an_absurd_age(self):
+        out = io.StringIO()
+        with unittest.mock.patch.object(v, "running_pid", return_value=4242), \
+             unittest.mock.patch.object(v, "read_meta", return_value={}), \
+             contextlib.redirect_stdout(out):
+            v.cmd_status(argparse.Namespace(no_ip=True))
+        text = out.getvalue()
+        self.assertIn("pid 4242", text)
+        self.assertNotIn("for ", text)
+
+    def test_disconnect_reports_when_the_daemon_survives(self):
+        order = []
+        out = io.StringIO()
+        with unittest.mock.patch.object(v, "running_pid", return_value=4242), \
+             unittest.mock.patch.object(v, "sudo_available", return_value=False), \
+             unittest.mock.patch.object(v, "clear_session",
+                                        side_effect=lambda: order.append("intent")), \
+             unittest.mock.patch.object(v, "clear_meta"), \
+             unittest.mock.patch.object(
+                 v, "kill_pid",
+                 side_effect=lambda *a, **k: (order.append("kill"), False)[1]), \
+             contextlib.redirect_stdout(out):
+            rc = v.cmd_disconnect(argparse.Namespace())
+        self.assertEqual(rc, 2)
+        self.assertIn("could not", out.getvalue())
+        # the user's intent is recorded before the (possibly slow) teardown,
+        # so a watchdog can never resurrect the tunnel mid-disconnect
+        self.assertEqual(order, ["intent", "kill"])
+
+    def test_kill_pid_reports_failure(self):
+        with unittest.mock.patch.object(v, "sudo_run"), \
+             unittest.mock.patch.object(v.os.path, "exists", return_value=True), \
+             unittest.mock.patch.object(v.time, "sleep"):
+            self.assertFalse(v.kill_pid(999, quiet=True))
+
+    def test_connect_argument_validation(self):
+        def ns(**over):
+            base = dict(country_opt=None, country_pos="JP", skip=0,
+                        index=None, max_tries=3)
+            base.update(over)
+            return argparse.Namespace(**base)
+
+        v.validate_connect_args(ns())
+        for bad in (dict(skip=-1), dict(index=0), dict(max_tries=0)):
+            with self.assertRaises(SystemExit):
+                v.validate_connect_args(ns(**bad))
+
+    def test_ping_zero_means_probe_off(self):
+        a = argparse.Namespace(ping=0, ping_exit=60)
+        v.check_ping_settings(a)
+        self.assertEqual(a.ping_exit, 0)
+        for ping, exit_after in ((-1, 60), (10, -1), (60, 60)):
+            with self.assertRaises(SystemExit):
+                v.check_ping_settings(
+                    argparse.Namespace(ping=ping, ping_exit=exit_after))
+
+    def test_build_conf_never_emits_ping_zero(self):
+        conf = v.build_conf(server(), keepalive=(0, 60))
+        self.assertNotIn("ping 0", conf)
+        self.assertNotIn("ping-exit 60", conf)
+
+    def test_intro_refresh_failure_keeps_the_menu_alive(self):
+        out = io.StringIO()
+        with unittest.mock.patch.object(
+                v, "refresh_servers",
+                side_effect=SystemExit("offline")), \
+                contextlib.redirect_stdout(out):
+            msg = v.intro_refresh()
+        self.assertTrue(msg.startswith("✗ refresh failed"), msg)
+
+    def test_load_cache_rejects_malformed_files(self):
+        folder = tempfile.mkdtemp()
+        path = os.path.join(folder, "servers.json")
+        with unittest.mock.patch.object(v, "cache_file", return_value=path):
+            for payload in ({"servers": []},
+                            {"updated": 1, "servers": "not-a-list"},
+                            {"updated": "today", "servers": []}):
+                with open(path, "w") as f:
+                    import json
+                    json.dump(payload, f)
+                self.assertIsNone(v.load_cache())
+            with open(path, "w") as f:
+                import json
+                json.dump({"updated": 1, "servers": []}, f)
+            self.assertEqual(v.load_cache()["servers"], [])
+
+    def test_state_dir_is_private(self):
+        path = v.state_dir()
+        st = os.lstat(path)
+        self.assertTrue(stat.S_ISDIR(st.st_mode))
+        self.assertEqual(stat.S_IMODE(st.st_mode), 0o700)
+        self.assertEqual(st.st_uid, v._invoking_uid())
+
+    def test_watch_rejects_zero_give_up(self):
+        with self.assertRaises(SystemExit):
+            v.cmd_watch(unittest.mock.Mock(give_up=0))
 
 
 if __name__ == "__main__":

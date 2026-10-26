@@ -39,8 +39,10 @@ import math
 import os
 import pwd
 import re
+import stat
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.error
 import urllib.parse
@@ -51,11 +53,96 @@ APP_VERSION = "1.0.0-beta5"
 UA = f"{APP}/{APP_VERSION} (linux; free public VPN client)"
 PID_FILE = "/run/vpnbox.pid"
 LOG_FILE = "/var/log/vpnbox.log"
-CONF_FILE = "/tmp/vpnbox-openvpn.ovpn"
-META_FILE = "/var/tmp/vpnbox.meta"
-SESSION_FILE = "/var/tmp/vpnbox.session.json"
+LEGACY_CONF_FILE = "/tmp/vpnbox-openvpn.ovpn"
+LEGACY_META_FILE = "/var/tmp/vpnbox.meta"
+LEGACY_SESSION_FILE = "/var/tmp/vpnbox.session.json"
 PING_DEFAULT = 10          # seconds between OpenVPN channel pings
 PING_EXIT_DEFAULT = 60     # exit the daemon when no ping comes back
+
+
+def _invoking_uid():
+    """The real user, also when this process runs under sudo."""
+    if os.geteuid() == 0:
+        su = os.environ.get("SUDO_USER")
+        if su:
+            try:
+                return pwd.getpwnam(su).pw_uid
+            except KeyError:
+                pass
+    return os.geteuid()
+
+
+def state_dir():
+    """Private runtime directory for the config and session state.
+
+    Never use a world-writable directory for root-owned files: a local user
+    could pre-create them (or plant a symlink) and tamper with the tunnel.
+    Root uses /run, users get a private 0700 dir in their runtime dir.
+    """
+    uid = _invoking_uid()
+    if uid == 0:
+        path, mode = "/run/vpnbox", 0o700
+    else:
+        base = None
+        candidates = [f"/run/user/{uid}"]
+        rt = os.environ.get("XDG_RUNTIME_DIR")
+        if rt and rt not in candidates:
+            candidates.append(rt)
+        for cand in candidates:
+            try:
+                st = os.lstat(cand)
+                if (stat.S_ISDIR(st.st_mode) and st.st_uid == uid
+                        and not stat.S_IMODE(st.st_mode) & 0o022):
+                    base = cand
+                    break
+            except OSError:
+                continue
+        base = base or tempfile.gettempdir()
+        path, mode = os.path.join(base, f"vpnbox-{uid}"), 0o700
+    try:
+        os.mkdir(path, mode)
+    except FileExistsError:
+        pass
+    st = os.lstat(path)
+    if not stat.S_ISDIR(st.st_mode):
+        raise SystemExit(f"{APP}: runtime path {path} is not a directory")
+    if os.geteuid() == 0 and st.st_uid != uid:
+        try:
+            os.chown(path, uid, pwd.getpwuid(uid).pw_gid)
+            st = os.lstat(path)
+        except (KeyError, OSError):
+            pass
+    if st.st_uid != uid:
+        raise SystemExit(f"{APP}: refusing unsafe runtime directory {path} "
+                         f"(owned by uid {st.st_uid}, expected {uid})")
+    if stat.S_IMODE(st.st_mode) != mode:
+        os.chmod(path, mode)
+    return path
+
+
+STATE_DIR = state_dir()
+CONF_FILE = os.path.join(STATE_DIR, "openvpn.ovpn")
+META_FILE = os.path.join(STATE_DIR, "meta.json")
+SESSION_FILE = os.path.join(STATE_DIR, "session.json")
+
+
+def atomic_write(path, text, mode=0o600):
+    """Write via a fresh temp file + rename. Reader-visible state is never
+    torn, and a pre-existing path (including a symlink) is replaced, not
+    followed."""
+    folder = os.path.dirname(path) or "."
+    fd, tmp = tempfile.mkstemp(prefix=".vpnbox-", dir=folder)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(text)
+        os.chmod(tmp, mode)
+        os.replace(tmp, path)
+    except OSError:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
 
 DEFAULT_SOURCE = "https://www.vpngate.net/api/iphone/"
 PROTO_IN_CONFIG = re.compile(r"^\s*proto\s+(\S+)", re.M)
@@ -520,7 +607,9 @@ def load_cache():
     try:
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
-        if not isinstance(data, dict) or "servers" not in data:
+        if (not isinstance(data, dict)
+                or not isinstance(data.get("servers"), list)
+                or not isinstance(data.get("updated"), (int, float))):
             return None
         return data
     except (OSError, json.JSONDecodeError):
@@ -653,9 +742,14 @@ def rank(r):
 
 
 def fetch_geo():
-    j = json.loads(http_get(
-        "http://ip-api.com/json?fields=status,country,countryCode,"
-        "regionName,city,isp,query", timeout=8))
+    """Best-effort public-IP lookup. Network failures must never turn a
+    successful connect (or a status read) into a crashed command."""
+    try:
+        j = json.loads(http_get(
+            "http://ip-api.com/json?fields=status,country,countryCode,"
+            "regionName,city,isp,query", timeout=8))
+    except (urllib.error.URLError, OSError, ValueError, json.JSONDecodeError):
+        return None
     return j if isinstance(j, dict) and j.get("status") == "success" else None
 
 
@@ -701,9 +795,10 @@ def build_conf(r, with_dns=True, keepalive=(PING_DEFAULT, PING_EXIT_DEFAULT)):
     extra = EXTRA_CONFIG
     if keepalive:
         interval, exit_after = keepalive
-        extra += f"\nping {interval}\n"
-        if exit_after:
-            extra += f"ping-exit {exit_after}\n"
+        if interval and interval > 0:
+            extra += f"\nping {interval}\n"
+            if exit_after and exit_after > 0:
+                extra += f"ping-exit {exit_after}\n"
     header = (f"### vpnbox profile — server {r['host']} ({r['country']})\n"
               f"### ip={r['ip']} city={r['city'] or '?'} isp={r['isp'] or '?'}\n"
               f"### generated {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
@@ -720,7 +815,8 @@ def running_pid():
         cmd = open(f"/proc/{pid}/cmdline", "rb").read().decode("utf-8", "replace")
     except OSError:
         return None
-    return pid if CONF_FILE in cmd else None
+    cmd = cmd.replace("\x00", " ")
+    return pid if "openvpn" in cmd and PID_FILE in cmd else None
 
 
 def sudo_available() -> bool:
@@ -739,12 +835,11 @@ def sudo_run(argv):
 
 def launch(r, keepalive=(PING_DEFAULT, PING_EXIT_DEFAULT)):
     conf = build_conf(r, keepalive=keepalive)
-    with open(CONF_FILE, "w", encoding="utf-8") as f:
-        f.write(conf)
     try:
-        os.chmod(CONF_FILE, 0o600)
-    except OSError:
-        pass
+        state_dir()
+        atomic_write(CONF_FILE, conf, 0o600)
+    except OSError as e:
+        return False, red(f"could not write the tunnel profile: {e}")
     # Remember where the shared log ends NOW — wait_ready() must only match
     # markers in bytes THIS session appends. Without this, a stale OK line
     # from a previous session makes us report success for a dead server.
@@ -814,40 +909,49 @@ def save_meta(r):
             "country": r["country"], "city": r["city"], "isp": r["isp"],
             "proto": r["proto"], "port": r["port"], "started": time.time()}
     try:
-        with open(META_FILE, "w") as f:
-            json.dump(meta, f)
-        os.chmod(META_FILE, 0o644)
+        state_dir()
+        atomic_write(META_FILE, json.dumps(meta), 0o644)
     except OSError:
         pass
 
 
 def read_meta():
-    try:
-        with open(META_FILE) as f:
-            return json.load(f)
-    except (OSError, json.JSONDecodeError):
-        return None
+    for path in (META_FILE, LEGACY_META_FILE):
+        try:
+            with open(path) as f:
+                meta = json.load(f)
+            return meta if isinstance(meta, dict) else None
+        except (OSError, json.JSONDecodeError):
+            continue
+    return None
+
+
+def _remove_state(*paths):
+    for path in paths:
+        try:
+            os.remove(path)
+        except OSError:
+            pass
 
 
 def clear_meta():
-    if os.geteuid() == 0 or os.access(META_FILE, os.W_OK):
-        try:
-            os.remove(META_FILE)
-            return
-        except OSError:
-            pass
-    subprocess.run(["sudo", "-n", "rm", "-f", META_FILE],
-                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    _remove_state(META_FILE, LEGACY_META_FILE)
+    if os.path.exists(META_FILE) or os.path.exists(LEGACY_META_FILE):
+        subprocess.run(["sudo", "-n", "rm", "-f", META_FILE, LEGACY_META_FILE],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
 def load_session():
     """The reconnect intent of the current/last connection, or None."""
-    try:
-        with open(SESSION_FILE) as f:
-            sess = json.load(f)
-    except (OSError, json.JSONDecodeError):
-        return None
-    return sess if isinstance(sess, dict) else None
+    for path in (SESSION_FILE, LEGACY_SESSION_FILE):
+        try:
+            with open(path) as f:
+                sess = json.load(f)
+        except (OSError, json.JSONDecodeError):
+            continue
+        if isinstance(sess, dict):
+            return sess
+    return None
 
 
 def save_session(country, city, site, office, nearest, proto, ping, ping_exit,
@@ -863,11 +967,9 @@ def save_session(country, city, site, office, nearest, proto, ping, ping_exit,
             "nearest": bool(nearest), "proto": proto, "ping": ping,
             "ping_exit": ping_exit, "connected_at": time.time()}
     try:
-        tmp = SESSION_FILE + ".tmp"
-        with open(tmp, "w") as f:
-            json.dump(sess, f)
-        os.chmod(tmp, 0o644)
-        os.replace(tmp, SESSION_FILE)              # readers never see a torn file
+        state_dir()
+        atomic_write(SESSION_FILE, json.dumps(sess), 0o644)
+        _remove_state(LEGACY_SESSION_FILE)
     except OSError:
         pass
     return sess
@@ -877,19 +979,20 @@ def clear_session():
     """Mark the session ended instead of deleting it. The marker must
     outlive the daemon teardown (which takes seconds) so a running
     `vpn watch` sees the user's decision and never resurrects the tunnel."""
-    if os.geteuid() == 0 or os.access(SESSION_FILE, os.W_OK):
-        try:
-            mark = {"stopped": True, "stopped_at": time.time()}
-            tmp = SESSION_FILE + ".tmp"
-            with open(tmp, "w") as f:
-                json.dump(mark, f)
-            os.chmod(tmp, 0o644)
-            os.replace(tmp, SESSION_FILE)
-            return
-        except OSError:
-            pass
-    subprocess.run(["sudo", "-n", "rm", "-f", SESSION_FILE],
-                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    mark = json.dumps({"stopped": True, "stopped_at": time.time()})
+    try:
+        state_dir()
+        atomic_write(SESSION_FILE, mark, 0o644)
+        _remove_state(LEGACY_SESSION_FILE)
+        return
+    except OSError:
+        pass
+    # last resort: remove the intent so the watcher treats it as ended
+    _remove_state(SESSION_FILE, LEGACY_SESSION_FILE)
+    if os.path.exists(SESSION_FILE) or os.path.exists(LEGACY_SESSION_FILE):
+        subprocess.run(["sudo", "-n", "rm", "-f", SESSION_FILE,
+                        LEGACY_SESSION_FILE],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
 def backoff_seconds(fail, base=30, cap=300):
@@ -914,6 +1017,16 @@ def session_namespace(sess):
 
 
 def check_ping_settings(args):
+    """Normalise/validate the dead-server probe flags.
+
+    --ping 0 means "off" (and therefore also disables --ping-exit).
+    A live probe must have a positive interval shorter than its timeout.
+    """
+    if args.ping < 0 or args.ping_exit < 0:
+        raise SystemExit("--ping and --ping-exit must be >= 0")
+    if args.ping == 0:
+        args.ping_exit = 0
+        return
     if args.ping_exit and args.ping >= args.ping_exit:
         raise SystemExit("--ping must be smaller than --ping-exit")
 
@@ -1112,6 +1225,8 @@ def cmd_servers(args):
     cache = load_cache()
     if not cache:
         raise SystemExit("no server list yet — run: vpn refresh")
+    if args.limit < 1:
+        raise SystemExit("--limit must be >= 1")
     sel, why = select_servers(cache["servers"], args.code, None)
     if args.city:
         sel, why = select_servers(sel, args.code, args.city)
@@ -1152,8 +1267,20 @@ def select_servers(servers, country=None, city=None):
     return out, "".join(why)
 
 
+def validate_connect_args(args):
+    """Reject values that would silently select zero servers or emit an
+    invalid tunnel profile."""
+    if args.skip < 0:
+        raise SystemExit("--skip must be >= 0")
+    if args.index is not None and args.index < 1:
+        raise SystemExit("--index must be >= 1")
+    if args.max_tries < 1:
+        raise SystemExit("--max-tries must be >= 1")
+
+
 def cmd_connect(args):
     args.country = args.country_opt or args.country_pos
+    validate_connect_args(args)
     check_ping_settings(args)
     cache = load_cache()
     if not cache:
@@ -1171,6 +1298,8 @@ def cmd_connect(args):
         try:
             refresh_servers(enrich=True)
             cache = load_cache()
+            if not cache:
+                raise SystemExit("refresh completed but the cache is unusable")
         except SystemExit:
             if not cache:
                 raise
@@ -1219,7 +1348,7 @@ def cmd_connect(args):
         sel = [r for r in sel if r["proto"] == args.proto]
     if args.skip:
         sel = sel[args.skip:]
-    if args.index:
+    if args.index is not None:
         if 1 <= args.index <= len(sel):
             sel = sel[args.index - 1: args.index]
         else:
@@ -1310,37 +1439,51 @@ def cmd_connect(args):
 
 
 def kill_pid(pid, quiet=False):
-    argv = ["kill", str(pid)]
-    sudo_run(argv)
+    """Stop one daemon and report whether it is really gone."""
+    sudo_run(["kill", str(pid)])
+    stopped = False
     for _ in range(24):
         if not os.path.exists(f"/proc/{pid}"):
+            stopped = True
             break
         time.sleep(0.25)
-    if os.path.exists(f"/proc/{pid}"):
+    if not stopped and os.path.exists(f"/proc/{pid}"):
         sudo_run(["kill", "-9", str(pid)])
         time.sleep(0.5)
+        stopped = not os.path.exists(f"/proc/{pid}")
+    if stopped:
+        # remove root-owned leftovers (SESSION_FILE is intent state, see
+        # clear_session — it must survive to reach the watchdog)
+        sudo_run(["rm", "-f", PID_FILE, CONF_FILE, META_FILE,
+                  LEGACY_CONF_FILE, LEGACY_META_FILE])
     if not quiet:
-        print(green("openvpn stopped"))
-    # remove root-owned leftovers (SESSION_FILE is intent state, see
-    # clear_session — it must survive to reach the watchdog)
-    sudo_run(["rm", "-f", PID_FILE, CONF_FILE, META_FILE])
+        print(green("openvpn stopped") if stopped
+              else red(f"could not stop openvpn (pid {pid}) — try: sudo vpn disconnect"))
+    return stopped
+
+
+def _vpn_pids():
+    try:
+        out = subprocess.run(["pgrep", "-f", re.escape(PID_FILE)],
+                             capture_output=True, text=True)
+    except FileNotFoundError:
+        return []
+    return out.stdout.split()
 
 
 def kill_stale():
-    """Terminate every openvpn bound to our config file. A relaunch
+    """Terminate every openvpn bound to our pid marker. A relaunch
     overwrites the pid file, so a failed attempt would leave an untracked
     daemon behind; leaked daemons fight over tun and routes."""
-    out = subprocess.run(["pgrep", "-f", CONF_FILE], capture_output=True,
-                         text=True)
-    for pid in out.stdout.split():
+    pids = _vpn_pids()
+    for pid in pids:
         sudo_run(["kill", str(pid)])
     for _ in range(24):                            # up to 6 s of grace
-        out = subprocess.run(["pgrep", "-f", CONF_FILE], capture_output=True,
-                             text=True)
-        if not out.stdout.strip():
+        pids = _vpn_pids()
+        if not pids:
             return
         time.sleep(0.25)
-    for pid in out.stdout.split():
+    for pid in pids:
         sudo_run(["kill", "-9", str(pid)])
 
 
@@ -1353,16 +1496,25 @@ def cmd_disconnect(args):
         print(red("needs sudo to check/remove root daemon state")); return 2
     if pid:
         print(f"terminating openvpn (pid {pid}) …")
-        kill_pid(pid)
-        clear_meta()
+        # intent first: a slow teardown must never race the watchdog into
+        # resurrecting the tunnel the user just asked to stop
         clear_session()
+        stopped = kill_pid(pid)
+        clear_meta()
+        if not stopped:
+            print(red("the tunnel could not be stopped — run: sudo vpn disconnect"))
+            return 2
     else:
         clear_meta()
         clear_session()
         # also clean forgotten files
-        if os.geteuid() != 0 and sudo_available():
-            subprocess.run(["sudo", "-n", "rm", "-f", PID_FILE, CONF_FILE],
-                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        rm = ["rm", "-f", PID_FILE, CONF_FILE, LEGACY_CONF_FILE]
+        if os.geteuid() == 0:
+            subprocess.run(rm, stdout=subprocess.DEVNULL,
+                           stderr=subprocess.DEVNULL)
+        elif sudo_available():
+            subprocess.run(["sudo", "-n"] + rm, stdout=subprocess.DEVNULL,
+                           stderr=subprocess.DEVNULL)
         print("not connected (cleaned any leftovers)")
 
 
@@ -1374,16 +1526,22 @@ def cmd_status(args):
         if meta:
             try: clear_meta()
             except Exception: pass
-        local = fetch_geo()
-        if local:
-            print(f"your current (unprotected) IP: {local.get('query')} — "
-                  f"{local.get('country')}, {local.get('city') or '?'}")
+        if not args.no_ip:
+            local = fetch_geo()
+            if local:
+                print(f"your current (unprotected) IP: {local.get('query')} — "
+                      f"{local.get('country')}, {local.get('city') or '?'}")
         return 0
     meta = read_meta() or {}
-    age = int(time.time() - meta.get("started", 0))
-    age_s = f"{age // 3600}h{(age % 3600) // 60}m" if age >= 3600 else (
-        f"{age // 60}m{age % 60}s")
-    print(green(bold("connected")) + f"   pid {pid}   for {age_s}")
+    started = meta.get("started")
+    if isinstance(started, (int, float)) and started > 0:
+        age = max(0, int(time.time() - started))
+        age_s = f"{age // 3600}h{(age % 3600) // 60}m" if age >= 3600 else (
+            f"{age // 60}m{age % 60}s")
+        age_txt = f"   for {age_s}"
+    else:
+        age_txt = ""
+    print(green(bold("connected")) + f"   pid {pid}" + age_txt)
     print(f"  server  : {meta.get('host')}  {meta.get('ip')} "
           f"{meta.get('proto')}/{meta.get('port') or '?'}")
     print(f"  country : {meta.get('country')}" +
@@ -1620,7 +1778,7 @@ def _drain_stdin():
     """consume everything the terminal already has queued (typed-ahead keys).
 
     A plain read-and-check loop in non-blocking windows — this works on any
-    terminal/PTY, unlike termios.tcflush() which is a silent no-op on some.”"""
+    terminal/PTY, unlike termios.tcflush() which is a silent no-op on some."""
     fd = sys.stdin.fileno()
     try:
         import select
@@ -1976,7 +2134,11 @@ def intro_refresh():
     print("\x1b[?25h\x1b[H\x1b[2J", end="", flush=True)
     print(bold("Refreshing the live server list…") +
           dim("  VPN Gate is a volunteer network — up to ~20 s."))
-    servers = refresh_servers(enrich=True)
+    try:
+        servers = refresh_servers(enrich=True)
+    except (SystemExit, Exception) as e:      # keep the menu alive on failure
+        reason = getattr(e, "code", None) or str(e) or "unknown error"
+        return f"✗ refresh failed — {reason}"
     ping_ok = sum(1 for r in servers if 0 < r["ping"] < 900)
     _GEO_MEMO["t"] = 0.0
     return (f"✓ refreshed · {len(servers)} servers · "
@@ -2007,6 +2169,8 @@ def cmd_watch(args):
     """Supervise the tunnel: if openvpn dies (volunteer servers do), reconnect
     with the same intent — country, city, site, office — with backoff between
     failed recovery cycles. Ctrl-C stops watching, never the tunnel."""
+    if args.give_up < 1:
+        raise SystemExit("--give-up must be >= 1")
     if os.geteuid() != 0 and not sudo_available():
         print(red("vpn watch needs sudo (it restarts the tunnel for you)"))
         return 2
@@ -2021,7 +2185,10 @@ def cmd_watch(args):
         if pid:
             print(red(f"the session was disconnected at {ended} — taking the "
                       f"tunnel down (pid {pid})"))
-            kill_pid(pid, quiet=True)
+            if not kill_pid(pid, quiet=True):
+                print(red("[watch] could not remove the tunnel — run: "
+                          "sudo vpn disconnect"))
+                return 2
             print(green("done — VPN is off"))
             return 0
         print(f"the session ended at {ended} — nothing to watch")
@@ -2032,7 +2199,8 @@ def cmd_watch(args):
             target += f" · {sess['city']}"
         if sess.get("site"):
             target += f" · site {sess['site']}"
-        print(green(bold("watching")) + f"  pid {pid}"
+        where = f"  pid {pid}" if pid else "  (tunnel down)"
+        print(green(bold("watching")) + where
               + (f"   intent: {target}" if target else ""))
     else:
         print(green(bold("watching")) + f"  pid {pid}")
@@ -2062,7 +2230,10 @@ def cmd_watch(args):
                 if pid:
                     print(red(f"[watch] removing the resurrected tunnel "
                               f"(pid {pid})"))
-                    kill_pid(pid, quiet=True)
+                    if not kill_pid(pid, quiet=True):
+                        print(red("[watch] could not remove the tunnel — run: "
+                                  "sudo vpn disconnect"))
+                        return 2
                 print(green("[watch] disconnected cleanly — exiting"))
                 return 0
             if watch_only:
@@ -2094,7 +2265,10 @@ def cmd_watch(args):
             after = load_session()
             if after and after.get("stopped"):
                 if pid:
-                    kill_pid(pid, quiet=True)
+                    if not kill_pid(pid, quiet=True):
+                        print(red("[watch] disconnect was requested but the "
+                                  "tunnel survived — run: sudo vpn disconnect"))
+                        return 2
                 print(yellow("[watch] disconnect was requested during the "
                              "recovery — tunnel removed"))
                 return 0
@@ -2107,6 +2281,10 @@ def cmd_watch(args):
                     hold_pid = pid
                     kill_pid(hold_pid, quiet=True)   # a cycle must own its daemon
                 failures += 1
+                if failures >= args.give_up:
+                    print(red(f"[watch] {failures} recovery cycles failed — "
+                              "giving up. The tunnel is down; try: vpn refresh"))
+                    return 2
                 wait = backoff_seconds(failures)
                 print(red(f"[watch] recovery {failures}/{args.give_up} failed —"
                           f" retrying in {wait} s"))
