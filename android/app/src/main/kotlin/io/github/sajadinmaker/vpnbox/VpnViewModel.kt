@@ -116,7 +116,7 @@ class VpnViewModel(app: Application) : AndroidViewModel(app) {
         connectJob?.cancel()
         // blocking network I/O — keep it off the main thread
         connectJob = viewModelScope.launch(Dispatchers.IO) {
-            home.update { it.copy(message = "refreshing the live server list …") }
+            home.update { it.copy(message = "Refreshing server list…") }
             try {
                 val text = VpnGate.fetchListText()
                 val servers = VpnGateParser.parse(text)
@@ -128,13 +128,13 @@ class VpnViewModel(app: Application) : AndroidViewModel(app) {
                 rebuildCountries()
                 val responsive = servers.count { it.ping in 1L..<900L }
                 home.update {
-                    it.copy(message = "refreshed · ${servers.size} servers · " +
+                    it.copy(message = "Updated · ${servers.size} servers · " +
                         "${servers.map { s -> s.cc }.distinct().size} countries · " +
-                        "$responsive responsive right now")
+                        "$responsive responding now")
                 }
             } catch (e: Exception) {
                 home.update {
-                    it.copy(message = "refresh failed — ${e.message ?: "offline?"}")
+                    it.copy(message = "Refresh failed — ${e.message ?: "network unavailable"}")
                 }
             }
         }
@@ -167,7 +167,7 @@ class VpnViewModel(app: Application) : AndroidViewModel(app) {
                 if (c == null ||
                     System.currentTimeMillis() - c.updated > 30 * 60_000L) {
                     if (c != null) {
-                        line("server list missing or >30 min old — refreshing …",
+                        line("Server list is missing or outdated — downloading a fresh copy…",
                              TerminalLine.Tone.WARN)
                     }
                     val text = VpnGate.fetchListText()
@@ -180,14 +180,14 @@ class VpnViewModel(app: Application) : AndroidViewModel(app) {
                 }
                 val servers0 = c?.servers ?: emptyList()
                 if (servers0.isEmpty()) {
-                    line("refresh completed but the list is unusable",
+                    line("Refresh completed, but the server list is unavailable",
                          TerminalLine.Tone.ERR)
                     terminal.update { it.copy(phase = WatchPhase.FAILED) }
                     return@launch
                 }
                 val (sel, why) = selectServers(servers0, country, city)
                 if (sel.isEmpty()) {
-                    line("no candidates. ${why.ifBlank { "try another country" }}",
+                    line(why.ifBlank { "No matching servers — try a different country." },
                          TerminalLine.Tone.ERR)
                     terminal.update { it.copy(phase = WatchPhase.FAILED) }
                     return@launch
@@ -201,26 +201,25 @@ class VpnViewModel(app: Application) : AndroidViewModel(app) {
                         return@launch
                     }
                 }
-                line("all attempts failed. volunteer servers are dynamic — " +
-                     "try: refresh", TerminalLine.Tone.ERR)
+                line("All attempts failed. The server list may be stale — " +
+                     "refresh the list and try again", TerminalLine.Tone.ERR)
                 terminal.update { it.copy(phase = WatchPhase.FAILED) }
             } catch (e: UserError) {
                 line("× ${e.message}", TerminalLine.Tone.ERR)
                 terminal.update { it.copy(phase = WatchPhase.FAILED) }
             } catch (e: Exception) {
-                line("× connect failed: ${e.message ?: "network error"}",
+                line("× Could not connect: ${e.message ?: "network error"}",
                      TerminalLine.Tone.ERR)
                 terminal.update { it.copy(phase = WatchPhase.FAILED) }
             }
         }
     }
 
-    private suspend fun attemptLine(i: Int, total: Int, r: Server) {
-        val where = r.city.ifBlank { r.host }
-        terminal.update {
+    private suspend fun attemptLine(i: Int, total: Int, r: Server) {        terminal.update {
             it.copy(lines = it.lines + TerminalLine(
-                "attempt ${i + 1}/$total: ${r.country} / $where (${r.ip})  " +
-                    "[${r.proto}/${r.port.ifBlank { "?" }} ping ${r.ping}ms]",
+                "Attempt ${i + 1}/$total · ${r.country} · ${r.ip} · " +
+                    "${r.proto.uppercase()}/${r.port.ifBlank { "?" }}" +
+                    (if (r.ping > 0) " · ${r.ping} ms" else ""),
                 TerminalLine.Tone.ACCENT))
         }
     }
@@ -239,17 +238,17 @@ class VpnViewModel(app: Application) : AndroidViewModel(app) {
         intent = fresh
         sessionStore.save(fresh)
         home.update { it.copy(connected = true) }
-        line("CONNECTED  via ${r.host}  [${r.country}" +
-             (if (r.city.isNotBlank()) " → ${r.city}" else "") + "]",
+        line("Connected · ${r.country}" +
+             (if (r.city.isNotBlank()) " · ${r.city}" else ""),
              TerminalLine.Tone.OK)
         VpnGate.fetchGeo()?.let { geo ->
             val where = listOf(geo["city"], geo["regionName"], geo["country"])
                 .filter { !it.isNullOrBlank() }.joinToString(", ")
-            line("exit IP : ${geo["query"]}", TerminalLine.Tone.PLAIN)
-            line("location: $where  (isp ${geo["isp"]?.ifBlank { "?" }})",
+            line("Exit IP: ${geo["query"]}", TerminalLine.Tone.PLAIN)
+            line("Location: $where · ISP ${geo["isp"]?.ifBlank { "?" }}",
                  TerminalLine.Tone.PLAIN)
         }
-        line("disconnect from Home → Disconnect", TerminalLine.Tone.PLAIN)
+        line("You can disconnect from the home screen", TerminalLine.Tone.PLAIN)
         terminal.update { it.copy(phase = WatchPhase.WATCH) }
         refreshGeoLabel()
     }
@@ -273,18 +272,18 @@ class VpnViewModel(app: Application) : AndroidViewModel(app) {
                     continue                   // the simulated daemon never dies on its own
                 }
                 liveKillSignal = false
-                line("tunnel killed — daemon terminated", TerminalLine.Tone.WARN)
+                line("Tunnel down", TerminalLine.Tone.WARN)
                 terminal.update { it.copy(phase = WatchPhase.KILL) }
                 val pending = intent ?: return@launch
                 if (pending.stopped) {        // user disconnect beat the watchdog
-                    line("[watch] user disconnected — honoring it",
+                    line("Disconnect was requested — staying offline",
                          TerminalLine.Tone.PLAIN)
                     hasHandshake = false
                     home.update { it.copy(connected = false) }
                     return@launch
                 }
-                line("[watch] tunnel down for 4 s — reconnecting " +
-                     "(cycle ${failures + 1}/$cycleMax) …", TerminalLine.Tone.WARN)
+                line("Reconnecting " +
+                     "(attempt ${failures + 1} of $cycleMax)", TerminalLine.Tone.WARN)
                 val (sel, _) = selectServers(cache?.servers.orEmpty(), country, city)
                 var recovered: Server? = null
                 for (r in sel.take(3)) {
@@ -298,8 +297,8 @@ class VpnViewModel(app: Application) : AndroidViewModel(app) {
                 if (rec == null) {
                     failures++
                     if (failures >= cycleMax) {
-                        line("[watch] $failures recovery cycles failed — giving " +
-                             "up. The tunnel is down; try: refresh",
+                        line("Reconnection failed after $failures attempts. " +
+                             "The tunnel is down — refresh the list and try again",
                              TerminalLine.Tone.ERR)
                         terminal.update { it.copy(phase = WatchPhase.FAILED) }
                         hasHandshake = false
@@ -307,8 +306,8 @@ class VpnViewModel(app: Application) : AndroidViewModel(app) {
                         return@launch
                     }
                     val wait = backoffSeconds(failures)
-                    line("[watch] recovery $failures/$cycleMax failed — " +
-                         "retrying in $wait s", TerminalLine.Tone.ERR)
+                    line("Reconnection attempt $failures of $cycleMax failed. " +
+                         "Retrying in $wait s", TerminalLine.Tone.ERR)
                     val until = System.currentTimeMillis() + wait * 1000
                     while (System.currentTimeMillis() < until) {
                         delay(1000)
@@ -323,7 +322,7 @@ class VpnViewModel(app: Application) : AndroidViewModel(app) {
                     intent = revived
                     sessionStore.save(revived)
                     home.update { it.copy(connected = true) }
-                    line("[watch] recovered the tunnel (via ${rec.host}) " +
+                    line("Reconnected " +
                          "after 4 s of downtime", TerminalLine.Tone.OK)
                     terminal.update { it.copy(phase = WatchPhase.RECOVERED) }
                     failures = 0
@@ -382,7 +381,7 @@ class VpnViewModel(app: Application) : AndroidViewModel(app) {
         home.update {
             it.copy(
                 connected = false,
-                message = "disconnected — you are back on your connection",
+                message = "Disconnected",
             )
         }
         screen.value = Screen.HOME

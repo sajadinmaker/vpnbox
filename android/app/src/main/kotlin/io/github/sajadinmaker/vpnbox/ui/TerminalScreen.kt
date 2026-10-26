@@ -163,25 +163,25 @@ fun TerminalScreen(ui: TerminalUi, onBack: () -> Unit, onKill: () -> Unit) {
 private fun phaseTag(p: WatchPhase) = when (p) {
     WatchPhase.CONNECT -> "CONNECTING"
     WatchPhase.WATCH -> "PROTECTED"
-    WatchPhase.KILL -> "RECOVERING"
+    WatchPhase.KILL -> "RECONNECTING"
     WatchPhase.RECOVERED -> "RECOVERED"
-    WatchPhase.FAILED -> "DOWN"
+    WatchPhase.FAILED -> "FAILED"
 }
 
 private fun phaseKicker(p: WatchPhase) = when (p) {
-    WatchPhase.CONNECT -> "01 · CONNECT"
-    WatchPhase.WATCH -> "02 · WATCH"
-    WatchPhase.KILL -> "03 · RECOVER"
-    WatchPhase.RECOVERED -> "04 · RECOVERED"
-    WatchPhase.FAILED -> "× FAILED"
+    WatchPhase.CONNECT -> "CONNECTING"
+    WatchPhase.WATCH -> "PROTECTED"
+    WatchPhase.KILL -> "RECONNECTING"
+    WatchPhase.RECOVERED -> "RECOVERED"
+    WatchPhase.FAILED -> "FAILED"
 }
 
 private fun phaseHeadline(p: WatchPhase) = when (p) {
-    WatchPhase.CONNECT -> "Establishing the tunnel…"
-    WatchPhase.WATCH -> "You're protected"
-    WatchPhase.KILL -> "Tunnel dropped — recovering automatically"
-    WatchPhase.RECOVERED -> "Back up — no human needed"
-    WatchPhase.FAILED -> "All attempts failed — refresh and retry"
+    WatchPhase.CONNECT -> "Establishing a secure connection…"
+    WatchPhase.WATCH -> "Tunnel is active — your traffic is protected"
+    WatchPhase.KILL -> "Connection lost — restoring automatically…"
+    WatchPhase.RECOVERED -> "Tunnel restored automatically"
+    WatchPhase.FAILED -> "Could not connect — refresh the list and try again"
 }
 
 @Composable

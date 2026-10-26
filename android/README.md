@@ -11,7 +11,7 @@ Compose app port of the `vpnbox` CLI. Same data semantics, Material 3 UI.
 - **UI**: Material 3 (dark, brand-red primary) — Scaffold + TopAppBar navigation,
   status hero card (green secondary-container state when connected), metric stat
   cards, icon list-row actions, message banners, animated screen transitions,
-  M3 log card, linear progress, and standard buttons. The reel-era pixel
+  M3 log card, linear progress, and standard buttons. The launch-era pixel
   wordmark survives in the launcher icon only.
 - **Engine seam**: `TunnelEngine` interface. Today `SimulatedEngine` drives the
   UI (real pacing, kill/recovery cycles reachable from the chips row).

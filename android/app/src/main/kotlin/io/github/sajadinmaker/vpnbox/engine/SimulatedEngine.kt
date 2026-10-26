@@ -27,13 +27,9 @@ class SimulatedEngine(
         _events.emit(e)
     }
 
-    override suspend fun start(server: Server, keepalive: Pair<Int, Int>): Result<Unit> {
-        val seconds = if (keepalive.first > 0 && keepalive.second > 0) {
-            "ping ${keepalive.first} · ping-exit ${keepalive.second}"
-        } else {
-            "probe off"
-        }
-        emit(EngineEvent.Log("launching tunnel ($seconds) …"))
+    override suspend fun start(server: Server, keepalive: Pair<Int, Int>): Result<Unit> {        emit(EngineEvent.Log(
+            "Connecting to ${server.ip}:${server.port.ifBlank { "?" }} " +
+                "(${server.proto.uppercase()})"))
         val fail = failures > 0
         if (fail) failures--
         if (fail) {
@@ -41,7 +37,7 @@ class SimulatedEngine(
             val bad = pickBadMarker()
             emit(EngineEvent.Log("× $bad"))
             emit(EngineEvent.Log(
-                "volunteer servers are dynamic — VPN Gate entries may vanish"))
+                "The selected server is unavailable"))
             emit(EngineEvent.HandshakeFailed(listOf(bad)))
             return Result.failure(VpnGate.VpnGateError("handshake failed"))
         }

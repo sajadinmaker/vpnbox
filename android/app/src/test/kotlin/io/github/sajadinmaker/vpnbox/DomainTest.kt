@@ -54,15 +54,15 @@ class DomainTest {
     fun `selectServers city miss lists known cities`() {
         val (out, why) = selectServers(listOf(server("1")), "JP", "osaka")
         assertTrue(out.isEmpty())
-        assertTrue(why.contains("city 'osaka' not found for JP"))
+        assertTrue(why.contains("No servers in JP match city 'osaka'"))
         assertTrue(why.contains("Tokyo"))
     }
 
     @Test
     fun `validateArgs rejects args that would select zero servers`() {
-        assertThrows("--skip must be >= 0") { validateArgs(-1, null, 3, 10, 60) }
-        assertThrows("--index must be >= 1") { validateArgs(0, 0, 3, 10, 60) }
-        assertThrows("--max-tries must be >= 1") { validateArgs(0, null, 0, 10, 60) }
+        assertThrows("Skip must be 0 or greater") { validateArgs(-1, null, 3, 10, 60) }
+        assertThrows("Index must be 1 or greater") { validateArgs(0, 0, 3, 10, 60) }
+        assertThrows("Retry count must be 1 or greater") { validateArgs(0, null, 0, 10, 60) }
     }
 
     @Test

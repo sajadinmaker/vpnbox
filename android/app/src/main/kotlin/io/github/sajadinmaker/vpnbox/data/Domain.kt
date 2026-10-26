@@ -34,7 +34,7 @@ fun selectServers(
         out = if (exact.isEmpty()) {
             val named = servers.filter { q.lowercase() in it.country.lowercase() }
             if (named.isEmpty()) {
-                return Pair(emptyList(), "country '$q' not found")
+                return Pair(emptyList(), "No servers found for '$q'. Refresh the list and try again.")
             }
             named
         } else {
@@ -51,9 +51,9 @@ fun selectServers(
             // connects anyway. The app refuses to ignore a missed filter.)
             val cities = out.mapNotNull { it.city.takeIf(String::isNotBlank) }.distinct().sorted()
             val avail = cities.take(12).joinToString(", ").ifBlank {
-                "(no city data — refresh again)"
+                "(no city data available)"
             }
-            why.append("city '$city' not found for $country; known: $avail")
+            why.append("No servers in $country match city '$city'. Available cities: $avail")
             out = emptyList()
         } else {
             out = tmp
@@ -71,20 +71,20 @@ fun validateArgs(
     ping: Int,
     pingExit: Int,
 ) {
-    if (skip < 0) throw UserError("--skip must be >= 0")
-    if (index != null && index < 1) throw UserError("--index must be >= 1")
-    if (maxTries < 1) throw UserError("--max-tries must be >= 1")
+    if (skip < 0) throw UserError("Skip must be 0 or greater")
+    if (index != null && index < 1) throw UserError("Index must be 1 or greater")
+    if (maxTries < 1) throw UserError("Retry count must be 1 or greater")
     checkPingSettings(ping, pingExit)
 }
 
 /** Twin of check_ping_settings(): 0/0 is legal (probe off), nonsense is not. */
 fun checkPingSettings(ping: Int, pingExit: Int): Int {
     var exitAfter = pingExit
-    if (ping < 0) throw UserError("--ping must be >= 0")
-    if (pingExit < 0) throw UserError("--ping-exit must be >= 0")
+    if (ping < 0) throw UserError("Ping interval must be 0 or greater")
+    if (pingExit < 0) throw UserError("Ping exit must be 0 or greater")
     if (ping == 0) exitAfter = 0                  // probe off ⇒ exit 0 (redundant)
     if (ping > 0 && exitAfter in 1..ping) throw UserError(
-        "--ping-exit ($exitAfter) must be larger than --ping ($ping), or 0 to disable")
+        "Ping exit ($exitAfter) must be greater than the ping interval ($ping), or 0 to disable")
     return exitAfter
 }
 

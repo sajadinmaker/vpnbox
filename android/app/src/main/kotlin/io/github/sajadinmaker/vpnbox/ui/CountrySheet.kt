@@ -54,7 +54,7 @@ fun CountrySheet(
                     color = MaterialTheme.colorScheme.onSurface,
                 )
                 Text(
-                    "${countries.size} pools live",
+                    "${countries.size} locations available",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

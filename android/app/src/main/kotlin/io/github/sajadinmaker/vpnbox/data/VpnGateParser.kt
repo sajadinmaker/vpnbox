@@ -28,11 +28,11 @@ object VpnGateParser {
             if (t.startsWith("#") || t.isBlank()) continue
             body.add(line.trimEnd('\r'))
         }
-        val hdr = header ?: throw VpnGate.VpnGateError("unrecognized VPN Gate response format.")
+        val hdr = header ?: throw VpnGate.VpnGateError("unrecognized response from VPN Gate")
         val idx = wanted.associateWith { hdr.indexOf(it) }
         val missing = idx.filterValues { it < 0 }.keys
         if (missing.isNotEmpty()) {
-            throw VpnGate.VpnGateError("VPN Gate API columns missing: $missing")
+            throw VpnGate.VpnGateError("VPN Gate feed is missing columns: $missing")
         }
         val out = mutableListOf<Server>()
         for (row in body) {

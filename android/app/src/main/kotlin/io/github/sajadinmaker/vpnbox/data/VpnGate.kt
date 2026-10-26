@@ -75,12 +75,12 @@ object VpnGate {
         try {
             if (data != null) conn.outputStream.use { it.write(data) }
             val code = conn.responseCode
-            if (code !in 200..299) throw VpnGateError("HTTP $code for $url")
+            if (code !in 200..299) throw VpnGateError("HTTP error $code")
             return conn.inputStream.use { it.readBytes() }
         } catch (e: VpnGateError) {
             throw e
         } catch (e: Exception) {
-            throw VpnGateError("network error for $url: " +
+            throw VpnGateError("network error: " +
                 "${e.javaClass.simpleName}: ${e.message}")
         } finally {
             conn.disconnect()
@@ -100,9 +100,9 @@ object VpnGate {
             }
         }
         throw VpnGateError(
-            "could not fetch the VPN Gate list " +
+            "could not reach any VPN Gate mirror " +
                 "(${lastErr?.javaClass?.simpleName}: ${lastErr?.message}). " +
-                "Try again later.")
+                "Check your connection and try again.")
     }
 
     /**

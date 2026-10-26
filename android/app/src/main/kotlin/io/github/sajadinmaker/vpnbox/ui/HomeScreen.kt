@@ -83,7 +83,7 @@ fun HomeScreen(ui: HomeUi, onAction: (HomeAction) -> Unit) {
             if (ui.message.isNotBlank()) MessageBanner(ui)
             Spacer(Modifier.height(8.dp))
             Text(
-                "No accounts · No keys · Volunteer relays",
+                "Powered by volunteer-run VPN Gate community servers",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.fillMaxWidth(),
@@ -139,7 +139,7 @@ private fun StatusHero(ui: HomeUi) {
                     if (connected) {
                         "Exit ${ui.geoLabel.ifBlank { "checking…" }}"
                     } else {
-                        "Your traffic is not tunneled yet"
+                        "Your connection is not protected"
                     },
                     style = MaterialTheme.typography.bodyMedium,
                     color = if (connected) MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.85f)
@@ -206,29 +206,29 @@ private fun ActionsCard(ui: HomeUi, onAction: (HomeAction) -> Unit) {
         Column(Modifier.padding(vertical = 4.dp)) {
             ActionRow(
                 icon = Icons.Filled.Bolt,
-                title = "Connect fastest anywhere",
-                subtitle = "Best available server right now",
+                title = "Connect to the fastest server",
+                subtitle = "Automatically picks the best server available",
                 enabled = ui.servers > 0,
                 tint = MaterialTheme.colorScheme.primary,
             ) { onAction(HomeAction.ConnectFast) }
             ActionRow(
                 icon = Icons.Filled.Public,
                 title = "Choose a country or city",
-                subtitle = "${ui.countries} countries ready",
+                subtitle = "${ui.countries} countries available",
                 enabled = ui.servers > 0,
                 tint = MaterialTheme.colorScheme.primary,
             ) { onAction(HomeAction.PickCountry) }
             ActionRow(
                 icon = Icons.Filled.Refresh,
-                title = "Refresh the live server list",
-                subtitle = "Pull the VPN Gate list again",
+                title = "Refresh server list",
+                subtitle = "Download the latest server list from VPN Gate",
                 enabled = true,
                 tint = MaterialTheme.colorScheme.primary,
             ) { onAction(HomeAction.Refresh) }
             ActionRow(
                 icon = Icons.Filled.PowerSettingsNew,
                 title = "Disconnect",
-                subtitle = "Bring the tunnel down",
+                subtitle = "End the current connection",
                 enabled = ui.connected,
                 tint = MaterialTheme.colorScheme.error,
             ) { onAction(HomeAction.Disconnect) }
@@ -294,7 +294,7 @@ private fun ActionRow(
 
 @Composable
 private fun MessageBanner(ui: HomeUi) {
-    val failed = ui.message.startsWith("refresh failed")
+    val failed = ui.message.startsWith("Refresh failed")
     Surface(
         shape = RoundedCornerShape(16.dp),
         color = if (failed) MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.35f)
