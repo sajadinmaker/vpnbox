@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- white pixel V (5x5 grid, 9px cells, 8px fill) from the reel's wordmark;
+         kept inside the 66dp adaptive-icon safe area -->
+    <path android:fillColor="#FFFFFF"
+        android:pathData="M32,36h8v8h-8z M67,36h8v8h-8z
+            M32,45h8v8h-8z M67,45h8v8h-8z
+            M32,54h8v8h-8z M67,54h8v8h-8z
+            M40,63h8v8h-8z M59,63h8v8h-8z
+            M49,72h8v8h-8z" />
+</vector>

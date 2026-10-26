@@ -1,0 +1,7 @@
+# Android build output
+build/
+.gradle/
+local.properties
+captures/
+.DS_Store
+*.iml
