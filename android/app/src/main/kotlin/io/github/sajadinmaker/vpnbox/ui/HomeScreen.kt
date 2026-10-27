@@ -20,13 +20,19 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
@@ -41,19 +47,24 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import io.github.sajadinmaker.vpnbox.HomeUi
+import io.github.sajadinmaker.vpnbox.R
 
-enum class HomeAction { ConnectFast, PickCountry, Refresh, Disconnect }
+enum class HomeAction { ConnectFast, PickCountry, Refresh, Disconnect, Settings, About }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -67,6 +78,7 @@ fun HomeScreen(ui: HomeUi, onAction: (HomeAction) -> Unit) {
     }
     Scaffold(
         topBar = {
+            var menuOpen by remember { mutableStateOf(false) }
             TopAppBar(
                 title = { Text("vpnbox", fontWeight = FontWeight.Bold) },
                 actions = {
@@ -74,8 +86,41 @@ fun HomeScreen(ui: HomeUi, onAction: (HomeAction) -> Unit) {
                         "1.0.0-beta5-android",
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(end = 16.dp),
+                        modifier = Modifier.padding(end = 4.dp),
                     )
+                    Box {
+                        IconButton(onClick = { menuOpen = true }) {
+                            Icon(
+                                Icons.Filled.MoreVert,
+                                contentDescription = stringResource(R.string.menu_more),
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = menuOpen,
+                            onDismissRequest = { menuOpen = false },
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.menu_settings)) },
+                                leadingIcon = {
+                                    Icon(Icons.Outlined.Settings, contentDescription = null)
+                                },
+                                onClick = {
+                                    menuOpen = false
+                                    onAction(HomeAction.Settings)
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.menu_about)) },
+                                leadingIcon = {
+                                    Icon(Icons.Outlined.Info, contentDescription = null)
+                                },
+                                onClick = {
+                                    menuOpen = false
+                                    onAction(HomeAction.About)
+                                },
+                            )
+                        }
+                    }
                 },
                 scrollBehavior = scrollBehavior,
             )
@@ -102,7 +147,7 @@ fun HomeScreen(ui: HomeUi, onAction: (HomeAction) -> Unit) {
                 ActionsCard(ui, onAction)
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "Powered by volunteer-run VPN Gate community servers",
+                    stringResource(R.string.home_footer),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.fillMaxWidth(),
@@ -149,7 +194,8 @@ private fun StatusHero(ui: HomeUi) {
             Spacer(Modifier.size(16.dp))
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
-                    if (connected) "Connected" else "Not connected",
+                    if (connected) stringResource(R.string.home_connected)
+                    else stringResource(R.string.home_not_connected),
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.SemiBold,
                     color = if (connected) MaterialTheme.colorScheme.onSecondaryContainer
@@ -157,9 +203,10 @@ private fun StatusHero(ui: HomeUi) {
                 )
                 Text(
                     if (connected) {
-                        "Exit ${ui.geoLabel.ifBlank { "checking…" }}"
+                        stringResource(R.string.home_exit_ip,
+                        ui.geoLabel.ifBlank { stringResource(R.string.home_checking) })
                     } else {
-                        "Your connection is not protected"
+                        stringResource(R.string.home_not_protected)
                     },
                     style = MaterialTheme.typography.bodyMedium,
                     color = if (connected) MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.85f)
@@ -176,18 +223,18 @@ private fun MetricsRow(ui: HomeUi) {
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         MetricCard(
             value = "${ui.servers}",
-            label = "live servers",
+            label = stringResource(R.string.home_metric_servers),
             modifier = Modifier.weight(1f),
         )
         MetricCard(
             value = "${ui.countries}",
-            label = "countries",
+            label = stringResource(R.string.home_metric_countries),
             modifier = Modifier.weight(1f),
         )
     }
     ui.cacheAgeMin?.let {
         Text(
-            "Refreshed ${ageText(it)}",
+            stringResource(R.string.home_refreshed, ageText(it)),
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -226,29 +273,29 @@ private fun ActionsCard(ui: HomeUi, onAction: (HomeAction) -> Unit) {
         Column(Modifier.padding(vertical = 4.dp)) {
             ActionRow(
                 icon = Icons.Filled.Bolt,
-                title = "Connect to the fastest server",
-                subtitle = "Automatically picks the best server available",
+                title = stringResource(R.string.action_connect_title),
+                subtitle = stringResource(R.string.action_connect_subtitle),
                 enabled = ui.servers > 0,
                 tint = MaterialTheme.colorScheme.primary,
             ) { onAction(HomeAction.ConnectFast) }
             ActionRow(
                 icon = Icons.Filled.Public,
-                title = "Choose a country or city",
-                subtitle = "${ui.countries} countries available",
+                title = stringResource(R.string.action_pick_title),
+                subtitle = stringResource(R.string.action_pick_subtitle, ui.countries),
                 enabled = ui.servers > 0,
                 tint = MaterialTheme.colorScheme.primary,
             ) { onAction(HomeAction.PickCountry) }
             ActionRow(
                 icon = Icons.Filled.Refresh,
-                title = "Refresh server list",
-                subtitle = "Download the latest server list from VPN Gate",
+                title = stringResource(R.string.action_refresh_title),
+                subtitle = stringResource(R.string.action_refresh_subtitle),
                 enabled = true,
                 tint = MaterialTheme.colorScheme.primary,
             ) { onAction(HomeAction.Refresh) }
             ActionRow(
                 icon = Icons.Filled.PowerSettingsNew,
-                title = "Disconnect",
-                subtitle = "End the current connection",
+                title = stringResource(R.string.action_disconnect_title),
+                subtitle = stringResource(R.string.action_disconnect_subtitle),
                 enabled = ui.connected,
                 tint = MaterialTheme.colorScheme.error,
             ) { onAction(HomeAction.Disconnect) }
@@ -300,8 +347,9 @@ private fun ActionRow(
     )
 }
 
+@Composable
 private fun ageText(min: Long): String = when {
-    min < 1 -> "just now"
-    min < 60 -> "$min min ago"
-    else -> "${min / 60} h ago"
+    min < 1 -> stringResource(R.string.age_just_now)
+    min < 60 -> stringResource(R.string.age_minutes, min)
+    else -> stringResource(R.string.age_hours, min / 60)
 }

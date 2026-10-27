@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import io.github.sajadinmaker.vpnbox.data.AppUiSettings
 import io.github.sajadinmaker.vpnbox.data.CacheStore
 import io.github.sajadinmaker.vpnbox.data.Server
 import io.github.sajadinmaker.vpnbox.data.ServerCache
@@ -14,8 +15,12 @@ import io.github.sajadinmaker.vpnbox.data.VpnGate
 import io.github.sajadinmaker.vpnbox.data.VpnGateParser
 import io.github.sajadinmaker.vpnbox.data.backoffSeconds
 import io.github.sajadinmaker.vpnbox.data.checkPingSettings
+import io.github.sajadinmaker.vpnbox.data.observeSettings
 import io.github.sajadinmaker.vpnbox.data.selectServers
 import io.github.sajadinmaker.vpnbox.data.validateArgs
+import io.github.sajadinmaker.vpnbox.data.setDynamicColor
+import io.github.sajadinmaker.vpnbox.data.setThemeMode
+import io.github.sajadinmaker.vpnbox.data.ThemeMode
 import io.github.sajadinmaker.vpnbox.engine.EngineEvent
 import io.github.sajadinmaker.vpnbox.engine.SimulatedEngine
 import java.io.File
@@ -28,7 +33,8 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-enum class Screen { HOME, TERMINAL }
+/** The screens the app can show, in navigation order. */
+enum class Screen { HOME, TERMINAL, SETTINGS, ABOUT }
 
 /** The chips row: connect → watch → kill → recovered (mirrors the reel beats). */
 enum class WatchPhase { CONNECT, WATCH, KILL, RECOVERED, FAILED }
@@ -67,6 +73,17 @@ class VpnViewModel(app: Application) : AndroidViewModel(app) {
     val home = MutableStateFlow(HomeUi())
     val terminal = MutableStateFlow(TerminalUi())
     val countries = MutableStateFlow<List<CountryPick>>(emptyList())
+    val settings = MutableStateFlow(AppUiSettings())
+
+    init {
+        // settings read is fault-tolerant (observeSettings falls back to
+        // defaults on a damaged store); persistence failures are logged
+        viewModelScope.launch {
+            getApplication<Application>().observeSettings().collect { parsed ->
+                settings.value = parsed
+            }
+        }
+    }
 
     private var cache: ServerCache? = null
     private var intent: SessionIntent? = null
@@ -354,6 +371,40 @@ class VpnViewModel(app: Application) : AndroidViewModel(app) {
 
     fun dismissAndGoHome() {
         screen.value = Screen.HOME
+    }
+
+    // ---- navigation ---------------------------------------------------------
+
+    fun goSettings() {
+        screen.value = Screen.SETTINGS
+    }
+
+    fun goAbout() {
+        screen.value = Screen.ABOUT
+    }
+
+    /** System back: terminal returns to home, deeper screens go back. */
+    fun onSystemBack() {
+        when (screen.value) {
+            Screen.TERMINAL -> dismissAndGoHome()
+            else -> screen.value = Screen.HOME
+        }
+    }
+
+    // ---- settings -----------------------------------------------------------
+
+    fun setThemeMode(mode: ThemeMode) {
+        viewModelScope.launch {
+            runCatching { getApplication<Application>().setThemeMode(mode) }
+                .onFailure { android.util.Log.w("vpnbox", "could not persist theme mode", it) }
+        }
+    }
+
+    fun setDynamicColor(on: Boolean) {
+        viewModelScope.launch {
+            runCatching { getApplication<Application>().setDynamicColor(on) }
+                .onFailure { android.util.Log.w("vpnbox", "could not persist dynamic color", it) }
+        }
     }
 
     private fun consumeEngineEvent(e: EngineEvent) {

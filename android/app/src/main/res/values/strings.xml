@@ -1,3 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">vpnbox</string>
+
+    <!-- Home -->
+    <string name="home_connected">Connected</string>
+    <string name="home_not_connected">Not connected</string>
+    <string name="home_not_protected">Your connection is not protected</string>
+    <string name="home_exit_ip">Exit %1$s</string>
+    <string name="home_checking">checking…</string>
+    <string name="home_metric_servers">live servers</string>
+    <string name="home_metric_countries">countries</string>
+    <string name="home_refreshed">Refreshed %1$s</string>
+    <string name="age_just_now">just now</string>
+    <string name="age_minutes">%1$d min ago</string>
+    <string name="age_hours">%1$d h ago</string>
+    <string name="action_connect_title">Connect to the fastest server</string>
+    <string name="action_connect_subtitle">Automatically picks the best server available</string>
+    <string name="action_pick_title">Choose a country or city</string>
+    <string name="action_pick_subtitle">%1$d countries available</string>
+    <string name="action_refresh_title">Refresh server list</string>
+    <string name="action_refresh_subtitle">Download the latest server list from VPN Gate</string>
+    <string name="action_disconnect_title">Disconnect</string>
+    <string name="action_disconnect_subtitle">End the current connection</string>
+    <string name="home_footer">Powered by volunteer-run VPN Gate community servers</string>
+
+    <!-- Home top-bar overflow menu -->
+    <string name="menu_more">More options</string>
+    <string name="menu_settings">Settings</string>
+    <string name="menu_about">About vpnbox</string>
+
+    <!-- Live session -->
+    <string name="terminal_title">Live session</string>
+    <string name="terminal_back">Back</string>
+    <string name="terminal_kill">Kill tunnel</string>
+    <string name="tag_connecting">CONNECTING</string>
+    <string name="tag_protected">PROTECTED</string>
+    <string name="tag_reconnecting">RECONNECTING</string>
+    <string name="tag_recovered">RECOVERED</string>
+    <string name="tag_failed">FAILED</string>
+    <string name="headline_connecting">Establishing a secure connection…</string>
+    <string name="headline_protected">Tunnel is active — your traffic is protected</string>
+    <string name="headline_reconnecting">Connection lost — restoring automatically…</string>
+    <string name="headline_recovered">Tunnel restored automatically</string>
+    <string name="headline_failed">Could not connect — refresh the list and try again</string>
+
+    <!-- Country picker -->
+    <string name="sheet_title">Choose a country</string>
+    <string name="sheet_subtitle">%1$d locations available</string>
+
+    <!-- Settings -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_appearance">Appearance</string>
+    <string name="settings_theme">Theme</string>
+    <string name="settings_theme_system">Follow system</string>
+    <string name="settings_theme_light">Light</string>
+    <string name="settings_theme_dark">Dark</string>
+    <string name="settings_dynamic_color">Dynamic color</string>
+    <string name="settings_dynamic_color_sub">Use Material You wallpaper colors (Android 12+)</string>
+
+    <!-- About -->
+    <string name="about_title">About vpnbox</string>
+    <string name="about_tagline">Portable, volunteer-run VPN client — no accounts, no keys, no analytics.</string>
+    <string name="about_version">Version</string>
+    <string name="about_engine">Engine</string>
+    <string name="about_engine_sub">Experimental in-app connect engine — OpenVPN core integration in progress</string>
+    <string name="about_source">Source code</string>
+    <string name="about_report">Report an issue</string>
+    <string name="about_vpngate_title">VPN Gate</string>
+    <string name="about_vpngate_sub">A free public relay service operated by the University of Tsukuba, Japan. Relay servers are run by volunteers worldwide.</string>
+    <string name="about_public_note">A VPN Gate relay is a public network — treat tunneling over it as you would any public Wi-Fi.</string>
 </resources>

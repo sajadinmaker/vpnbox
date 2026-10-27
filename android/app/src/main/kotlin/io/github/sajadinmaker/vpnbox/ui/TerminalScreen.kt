@@ -33,10 +33,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import io.github.sajadinmaker.vpnbox.R
 import io.github.sajadinmaker.vpnbox.TerminalLine
 import io.github.sajadinmaker.vpnbox.TerminalUi
 import io.github.sajadinmaker.vpnbox.WatchPhase
@@ -52,7 +54,7 @@ fun TerminalScreen(ui: TerminalUi, onBack: () -> Unit, onKill: () -> Unit) {
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
-                title = { Text("Live session") },
+                title = { Text(stringResource(R.string.terminal_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -146,7 +148,7 @@ fun TerminalScreen(ui: TerminalUi, onBack: () -> Unit, onKill: () -> Unit) {
                 FilledTonalButton(
                     onClick = onBack,
                     modifier = Modifier.weight(1f),
-                ) { Text("Back") }
+                ) { Text(stringResource(R.string.terminal_back)) }
                 OutlinedButton(
                     onClick = onKill,
                     enabled = ui.phase == WatchPhase.WATCH,
@@ -154,34 +156,31 @@ fun TerminalScreen(ui: TerminalUi, onBack: () -> Unit, onKill: () -> Unit) {
                         contentColor = MaterialTheme.colorScheme.error,
                     ),
                     modifier = Modifier.weight(1f),
-                ) { Text("Kill tunnel") }
+                ) { Text(stringResource(R.string.terminal_kill)) }
             }
         }
     }
 }
 
-private fun phaseTag(p: WatchPhase) = when (p) {
-    WatchPhase.CONNECT -> "CONNECTING"
-    WatchPhase.WATCH -> "PROTECTED"
-    WatchPhase.KILL -> "RECONNECTING"
-    WatchPhase.RECOVERED -> "RECOVERED"
-    WatchPhase.FAILED -> "FAILED"
+@Composable
+private fun phaseTag(p: WatchPhase): String = when (p) {
+    WatchPhase.CONNECT -> stringResource(R.string.tag_connecting)
+    WatchPhase.WATCH -> stringResource(R.string.tag_protected)
+    WatchPhase.KILL -> stringResource(R.string.tag_reconnecting)
+    WatchPhase.RECOVERED -> stringResource(R.string.tag_recovered)
+    WatchPhase.FAILED -> stringResource(R.string.tag_failed)
 }
 
-private fun phaseKicker(p: WatchPhase) = when (p) {
-    WatchPhase.CONNECT -> "CONNECTING"
-    WatchPhase.WATCH -> "PROTECTED"
-    WatchPhase.KILL -> "RECONNECTING"
-    WatchPhase.RECOVERED -> "RECOVERED"
-    WatchPhase.FAILED -> "FAILED"
-}
+@Composable
+private fun phaseKicker(p: WatchPhase): String = phaseTag(p)
 
-private fun phaseHeadline(p: WatchPhase) = when (p) {
-    WatchPhase.CONNECT -> "Establishing a secure connection…"
-    WatchPhase.WATCH -> "Tunnel is active — your traffic is protected"
-    WatchPhase.KILL -> "Connection lost — restoring automatically…"
-    WatchPhase.RECOVERED -> "Tunnel restored automatically"
-    WatchPhase.FAILED -> "Could not connect — refresh the list and try again"
+@Composable
+private fun phaseHeadline(p: WatchPhase): String = when (p) {
+    WatchPhase.CONNECT -> stringResource(R.string.headline_connecting)
+    WatchPhase.WATCH -> stringResource(R.string.headline_protected)
+    WatchPhase.KILL -> stringResource(R.string.headline_reconnecting)
+    WatchPhase.RECOVERED -> stringResource(R.string.headline_recovered)
+    WatchPhase.FAILED -> stringResource(R.string.headline_failed)
 }
 
 @Composable

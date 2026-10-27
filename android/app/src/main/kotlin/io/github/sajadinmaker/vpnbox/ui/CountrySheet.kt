@@ -22,9 +22,13 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import io.github.sajadinmaker.vpnbox.CountryPick
+import io.github.sajadinmaker.vpnbox.R
+
+/** Country picker: a Material 3 bottom sheet with standard list rows. */
 
 /** Country picker: a Material 3 bottom sheet with standard list rows. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -47,13 +51,13 @@ fun CountrySheet(
         ) {
             Column(Modifier.padding(horizontal = 20.dp)) {
                 Text(
-                    "Choose a country",
+                    stringResource(R.string.sheet_title),
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
                 Text(
-                    "${countries.size} locations available",
+                    stringResource(R.string.sheet_subtitle, countries.size),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
