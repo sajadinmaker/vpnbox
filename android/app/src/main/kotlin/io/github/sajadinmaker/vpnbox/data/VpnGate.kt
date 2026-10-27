@@ -3,6 +3,7 @@ package io.github.sajadinmaker.vpnbox.data
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.Base64
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -79,6 +80,8 @@ object VpnGate {
             return conn.inputStream.use { it.readBytes() }
         } catch (e: VpnGateError) {
             throw e
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             throw VpnGateError("network error: " +
                 "${e.javaClass.simpleName}: ${e.message}")
@@ -94,6 +97,8 @@ object VpnGate {
             try {
                 val text = httpGet(url).toString(Charsets.UTF_8)
                 if (HOSTNAME_HEADER in text) return text
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 android.util.Log.e("vpnbox", "fetch $url failed", e)
                 lastErr = e
@@ -123,6 +128,8 @@ object VpnGate {
                 obj[k]?.let { out[k] = it.jsonPrimitive.content }
             }
             out
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             null
         }

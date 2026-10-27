@@ -20,8 +20,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.ErrorOutline
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Refresh
@@ -30,13 +28,20 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -45,6 +50,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import io.github.sajadinmaker.vpnbox.HomeUi
 
 enum class HomeAction { ConnectFast, PickCountry, Refresh, Disconnect }
@@ -52,8 +58,14 @@ enum class HomeAction { ConnectFast, PickCountry, Refresh, Disconnect }
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(ui: HomeUi, onAction: (HomeAction) -> Unit) {
+    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
+    val snackbarHostState = remember { SnackbarHostState() }
+    LaunchedEffect(ui.message) {
+        if (ui.message.isNotBlank()) {
+            snackbarHostState.showSnackbar(ui.message, duration = SnackbarDuration.Long)
+        }
+    }
     Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
                 title = { Text("vpnbox", fontWeight = FontWeight.Bold) },
@@ -65,30 +77,38 @@ fun HomeScreen(ui: HomeUi, onAction: (HomeAction) -> Unit) {
                         modifier = Modifier.padding(end = 16.dp),
                     )
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
+                scrollBehavior = scrollBehavior,
             )
         },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { pad ->
-        Column(
+        PullToRefreshBox(
+            isRefreshing = ui.message.startsWith("Refreshing server list"),
+            onRefresh = { onAction(HomeAction.Refresh) },
             modifier = Modifier
                 .fillMaxSize()
-                .padding(pad)
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+                .padding(pad),
         ) {
-            StatusHero(ui)
-            MetricsRow(ui)
-            ActionsCard(ui, onAction)
-            if (ui.message.isNotBlank()) MessageBanner(ui)
-            Spacer(Modifier.height(8.dp))
-            Text(
-                "Powered by volunteer-run VPN Gate community servers",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.fillMaxWidth(),
-                textAlign = TextAlign.Center,
-            )
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .nestedScroll(scrollBehavior.nestedScrollConnection)
+                    .verticalScroll(rememberScrollState())
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                StatusHero(ui)
+                MetricsRow(ui)
+                ActionsCard(ui, onAction)
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "Powered by volunteer-run VPN Gate community servers",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.Center,
+                )
+            }
         }
     }
 }
@@ -245,81 +265,39 @@ private fun ActionRow(
     tint: Color,
     onClick: () -> Unit,
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(enabled = enabled, onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(
-            modifier = Modifier
-                .size(40.dp)
-                .clip(RoundedCornerShape(14.dp))
-                .background(
-                    if (enabled) tint.copy(alpha = 0.14f)
-                    else MaterialTheme.colorScheme.surfaceVariant,
-                ),
-            contentAlignment = Alignment.Center,
-        ) {
+    ListItem(
+        headlineContent = { Text(title) },
+        supportingContent = { Text(subtitle) },
+        leadingContent = {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(
+                        if (enabled) tint.copy(alpha = 0.14f)
+                        else MaterialTheme.colorScheme.surfaceVariant,
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    icon,
+                    contentDescription = null,
+                    tint = if (enabled) tint else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+        },
+        trailingContent = {
             Icon(
-                icon,
+                Icons.Filled.ChevronRight,
                 contentDescription = null,
-                tint = if (enabled) tint else MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(20.dp),
+                tint = if (enabled) MaterialTheme.colorScheme.onSurfaceVariant
+                else MaterialTheme.colorScheme.outlineVariant,
             )
-        }
-        Spacer(Modifier.size(14.dp))
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
-            Text(
-                title,
-                style = MaterialTheme.typography.titleMedium,
-                color = if (enabled) MaterialTheme.colorScheme.onSurface
-                else MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        Icon(
-            Icons.Filled.ChevronRight,
-            contentDescription = null,
-            tint = if (enabled) MaterialTheme.colorScheme.onSurfaceVariant
-            else MaterialTheme.colorScheme.outlineVariant,
-        )
-    }
-}
-
-@Composable
-private fun MessageBanner(ui: HomeUi) {
-    val failed = ui.message.startsWith("Refresh failed")
-    Surface(
-        shape = RoundedCornerShape(16.dp),
-        color = if (failed) MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.35f)
-        else MaterialTheme.colorScheme.surfaceContainerLow,
-    ) {
-        Row(
-            modifier = Modifier.padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(
-                if (failed) Icons.Filled.ErrorOutline else Icons.Filled.Info,
-                contentDescription = null,
-                tint = if (failed) MaterialTheme.colorScheme.error
-                else MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(20.dp),
-            )
-            Spacer(Modifier.size(12.dp))
-            Text(
-                ui.message,
-                style = MaterialTheme.typography.bodyMedium,
-                color = if (failed) MaterialTheme.colorScheme.onErrorContainer
-                else MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
+        },
+        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+        modifier = Modifier.clickable(enabled = enabled, onClick = onClick),
+    )
 }
 
 private fun ageText(min: Long): String = when {

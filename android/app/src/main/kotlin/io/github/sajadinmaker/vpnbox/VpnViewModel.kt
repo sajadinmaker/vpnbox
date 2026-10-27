@@ -19,6 +19,7 @@ import io.github.sajadinmaker.vpnbox.data.validateArgs
 import io.github.sajadinmaker.vpnbox.engine.EngineEvent
 import io.github.sajadinmaker.vpnbox.engine.SimulatedEngine
 import java.io.File
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -75,7 +76,15 @@ class VpnViewModel(app: Application) : AndroidViewModel(app) {
     private var liveKillSignal = false
     private val cycleMax = 3
 
+    private var started = false
+
     fun start() {
+        // idempotent: Activity configuration changes (rotation, dark-mode
+        // toggle) recreate the composition but not this ViewModel — starting
+        // twice would attach a second event collector and duplicate every
+        // engine event in the terminal log
+        if (started) return
+        started = true
         viewModelScope.launch {
             engine.events.collect { consumeEngineEvent(it) }
         }
@@ -132,6 +141,8 @@ class VpnViewModel(app: Application) : AndroidViewModel(app) {
                         "${servers.map { s -> s.cc }.distinct().size} countries · " +
                         "$responsive responding now")
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 home.update {
                     it.copy(message = "Refresh failed — ${e.message ?: "network unavailable"}")
@@ -151,6 +162,8 @@ class VpnViewModel(app: Application) : AndroidViewModel(app) {
     // ---- connect ------------------------------------------------------------
 
     fun connect(country: String?, city: String?) {
+        // double-tap guard: never stack a second connect while one is on screen
+        if (screen.value == Screen.TERMINAL && connectJob?.isActive == true) return
         screen.value = Screen.TERMINAL
         terminal.value = TerminalUi(phase = WatchPhase.CONNECT)
         intent = null
@@ -204,6 +217,8 @@ class VpnViewModel(app: Application) : AndroidViewModel(app) {
                 line("All attempts failed. The server list may be stale — " +
                      "refresh the list and try again", TerminalLine.Tone.ERR)
                 terminal.update { it.copy(phase = WatchPhase.FAILED) }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: UserError) {
                 line("× ${e.message}", TerminalLine.Tone.ERR)
                 terminal.update { it.copy(phase = WatchPhase.FAILED) }
