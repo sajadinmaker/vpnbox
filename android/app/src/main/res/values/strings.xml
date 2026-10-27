@@ -63,7 +63,7 @@
     <string name="about_tagline">Portable, volunteer-run VPN client — no accounts, no keys, no analytics.</string>
     <string name="about_version">Version</string>
     <string name="about_engine">Engine</string>
-    <string name="about_engine_sub">Experimental in-app connect engine — OpenVPN core integration in progress</string>
+    <string name="about_engine_sub">Real OpenVPN 3 core — the same engine as desktop OpenVPN, built into the app</string>
     <string name="about_source">Source code</string>
     <string name="about_report">Report an issue</string>
     <string name="about_vpngate_title">VPN Gate</string>

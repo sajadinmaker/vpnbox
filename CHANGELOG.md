@@ -5,6 +5,12 @@ cycle uses `1.0.0-beta1`, `1.0.0-beta2`, …
 
 ## Unreleased
 
+### Removed
+- The Python CLI (`vpnbox` command, install/uninstall scripts, and the Python
+  test suite) has been removed. The Android client is now the supported
+  product; CLI behavior that matters — server ranking, watchdog recovery,
+  profile hardening — was ported to the Android app before removal.
+
 ### Fixed
 - `vpn status --no-ip` no longer prints your unprotected address while the
   tunnel is down. The flag now suppresses the lookup in every state.

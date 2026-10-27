@@ -18,10 +18,8 @@ sealed interface EngineEvent {
 }
 
 /**
- * The engine seam. Today's implementation is the in-process simulator
- * (SimulatedEngine) with CLI-identical behavior; swapping in a real
- * OpenVPN core (ics-openvpn) means implementing this interface — the
- * repo's `VpnboxVpnService` is the Android-side skeleton for exactly that.
+ * The engine seam. Production implementation: [OpenVpn3Engine], which hosts
+ * the real OpenVPN 3 core inside `VpnboxVpnService`.
  */
 interface TunnelEngine {
     val events: kotlinx.coroutines.flow.Flow<EngineEvent>

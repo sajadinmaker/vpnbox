@@ -33,3 +33,4 @@ plugins {
 rootProject.name = "vpnbox"
 
 include(":app")
+include(":engine")

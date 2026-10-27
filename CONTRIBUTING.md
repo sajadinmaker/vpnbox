@@ -1,51 +1,62 @@
 # Contributing to vpnbox
 
-Thanks for helping. vpnbox's design constraints are the whole product — please
-read these before opening a pull request.
+Thanks for helping. The Android client is the product; these rules keep it
+consistent. All Gradle commands run from the `android/` directory.
 
-## The rules of the house
+## Development setup
 
-1. **One file.** The entire application lives in `vpnbox.py`, standard library
-   only. No pip dependencies, no imports beyond the stdlib. A user should be
-   able to read the whole program on a train.
-2. **No accounts, ever.** VPN Gate is anonymous and key-free; vpnbox must stay
-   that way.
-3. **Fail loudly, fail fast.** Volunteer servers churn. Never paper over a
-   failure — surface it (and then auto-failover if a *better* candidate exists).
-4. **Polite to shared infrastructure.** Nominatim: max 1 request/second, a real
-   User-Agent. ip-api: batch endpoint only (100 IPs/request).
-5. **Accurate status output.** Exit IP is always printed after a connect; country
-   mismatch is a warning, never a silent success.
-
-## Development flow
+- JDK 17.
+- Android SDK (API 36), or `sdk.dir` set in `android/local.properties`.
+- A clone of this repository.
 
 ```bash
-git clone https://github.com/sajadinmaker/vpnbox && cd vpnbox
-make check                 # syntax: python compile + bash -n
-make test                  # hermetic unit tests (no network, no root)
-sudo ./install.sh          # installs ./vpnbox.py as /usr/local/bin/vpn
+git clone https://github.com/sajadinmaker/vpnbox && cd vpnbox/android
+./gradlew assembleDebug           # build a debug APK
+./gradlew testDebugUnitTest       # unit tests
 ```
 
-Live-fire testing (needs root, hits the real VPN Gate network):
+## Project rules
 
-```bash
-sudo vpn connect --country JP          # or any --site/--office target
-vpn status && sudo vpn disconnect
-```
+1. **Layered packages.** `VpnGate` fetches and parses relay data,
+   `Domain`/data types hold pure logic — no Android imports where possible —
+   `VpnViewModel` orchestrates, and `ui/` is Compose only. Pure logic changes
+   get unit tests in `android/app/src/test/kotlin/`.
+2. **Strings are resources.** UI strings live in `res/values/strings.xml`,
+   never hardcoded in screens. The app must stay ready for per-app locales.
+3. **Public data is fault-tolerant.** Malformed caches or server lists are
+   ignored and refreshed, never crash. Network lookups (geo, fetch) are
+   best-effort and may fail silently where the UX allows it.
+4. **Country mismatch is visible.** If the exit-IP country does not match the
+   selected server country, surface it to the user. Never silently succeed.
+5. **One version source.** The version name lives in
+   `android/app/build.gradle.kts` (`versionName`); the version-consistency
+   unit test must stay green. Never hardcode the version string in UI screens
+   or docs code.
+6. **Release hygiene.** R8 minification stays on for release builds. Signing
+   material exists only through gitignored `android/keystore.properties` —
+   never commit keys or passwords.
 
-## Release checklist (maintainers)
+## Releasing (maintainers)
 
-1. Bump `APP_VERSION` in `vpnbox.py` — it is the single source of truth.
-2. Add a matching `## X.Y.Z — date` section to `CHANGELOG.md`
-   (`test_version_single_source_of_truth` enforces this).
-3. Update `README.md` if behavior changed.
-4. Commit, tag `vX.Y.Z`, push both: `git push origin main vX.Y.Z`
-   — the `release` workflow builds the tarball, checksums it, and attaches
-   both to the GitHub release automatically.
+1. Bump `versionName` and `versionCode` in `android/app/build.gradle.kts`.
+2. Add a matching section to `CHANGELOG.md`.
+3. Run:
 
-## Style
+   ```bash
+   ./gradlew testDebugUnitTest assembleRelease bundleRelease
+   ```
 
-- Python: stdlib, 4-space indent, f-strings, `def name(...)` with docstrings
-  on non-obvious functions (match the existing file).
-- Shell: `set -euo pipefail`, tab-free indents of 4.
-- Commits: imperative mood, one logical change per commit.
+4. Create a git tag and push it. The `release` workflow builds, signs,
+   checksums, and attaches the artifacts to the GitHub release.
+5. On the GitHub release, rename the uploaded artifacts to
+   `vpnbox-<version>.apk`, `vpnbox-<version>.aab`, and `SHA256SUMS`, and write
+   a notes body.
+
+Keep the CLI-era tag convention: `vX.Y.Z-name` (as in `v1.0.0-beta5-android`).
+
+## Pull requests
+
+- Keep them small; one logical change each.
+- Include unit-test output for anything touching logic.
+- Do not post screenshots containing real IP addresses in PRs or releases —
+  redact or crop them.

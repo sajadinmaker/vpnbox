@@ -1,5 +1,7 @@
 package io.github.sajadinmaker.vpnbox.ui
 
+import io.github.sajadinmaker.vpnbox.BuildConfig
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -83,7 +85,7 @@ fun HomeScreen(ui: HomeUi, onAction: (HomeAction) -> Unit) {
                 title = { Text("vpnbox", fontWeight = FontWeight.Bold) },
                 actions = {
                     Text(
-                        "1.0.0-beta5-android",
+                        BuildConfig.VERSION_NAME,
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(end = 4.dp),

@@ -1,5 +1,17 @@
 name: release
 
+# Maintainer setup (once, before tagging any release):
+#
+#   1. Add four repository secrets (Settings > Secrets and variables > Actions):
+#        ANDROID_STORE_FILE      - base64-encoded release keystore (.jks)
+#        ANDROID_STORE_PASSWORD  - keystore password
+#        ANDROID_KEY_ALIAS       - key alias inside the keystore
+#        ANDROID_KEY_PASSWORD    - key password
+#   2. Tag the release as vX.Y.Z-name (e.g. v1.0.0-beta5-android) and push it.
+#
+# There is no fallback signing path: if the secrets are missing the decode
+# step fails fast, and that is intended for a release build.
+
 on:
   push:
     tags: ["v*"]
@@ -11,40 +23,60 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Tag must match APP_VERSION
-        run: |
-          V="${GITHUB_REF_NAME#v}"
-          grep -qx "APP_VERSION = \"${V}\"" vpnbox.py
-
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
         with:
-          python-version: "3.12"
+          submodules: recursive
 
-      - name: Smoke + unit tests
-        run: |
-          python3 vpnbox.py --version
-          python3 -m unittest discover -s . -p "test_*.py" -v
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+          cache: gradle
 
-      - name: Build release tarball
+      - uses: android-actions/setup-android@v4
+
+      - name: Decode keystore and write keystore.properties
+        env:
+          ANDROID_STORE_FILE: ${{ secrets.ANDROID_STORE_FILE }}
+          ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           V="${GITHUB_REF_NAME#v}"
-          mkdir -p "pkg/vpnbox-${V}" dist
-          cp vpnbox.py README.md CHANGELOG.md LICENSE install.sh \
-             uninstall.sh "pkg/vpnbox-${V}/"
-          tar -czf "dist/vpnbox-${V}.tar.gz" -C pkg "vpnbox-${V}"
-          cd dist && sha256sum "vpnbox-${V}.tar.gz" > SHA256SUMS
+          test -n "$ANDROID_STORE_FILE" || { echo "::error::ANDROID_STORE_FILE secret is not set; release signing is required." >&2; exit 1; }
+          test -n "$ANDROID_STORE_PASSWORD" || { echo "::error::ANDROID_STORE_PASSWORD secret is not set." >&2; exit 1; }
+          test -n "$ANDROID_KEY_ALIAS" || { echo "::error::ANDROID_KEY_ALIAS secret is not set." >&2; exit 1; }
+          test -n "$ANDROID_KEY_PASSWORD" || { echo "::error::ANDROID_KEY_PASSWORD secret is not set." >&2; exit 1; }
+          STORE_FILE="$PWD/android/release.jks"
+          echo "$ANDROID_STORE_FILE" | base64 --decode > "$STORE_FILE"
+          {
+            echo "storeFile=$STORE_FILE"
+            echo "storePassword=$ANDROID_STORE_PASSWORD"
+            echo "keyAlias=$ANDROID_KEY_ALIAS"
+            echo "keyPassword=$ANDROID_KEY_PASSWORD"
+          } > android/keystore.properties
+
+      - name: Test and build release artifacts
+        run: ./gradlew testDebugUnitTest assembleRelease bundleRelease
+        working-directory: android
+
+      - name: Stage artifacts
+        run: |
+          V="${GITHUB_REF_NAME#v}"
+          mkdir -p dist
+          cp android/app/build/outputs/apk/release/app-release.apk "dist/vpnbox-${V}.apk"
+          cp android/app/build/outputs/bundle/release/app-release.aab "dist/vpnbox-${V}.aab"
+          cp android/app/build/outputs/mapping/release/mapping.txt "dist/mapping-${V}.txt"
+          (cd dist && sha256sum "vpnbox-${V}.apk" "vpnbox-${V}.aab" > SHA256SUMS)
 
       - name: Publish to GitHub Releases
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           V="${GITHUB_REF_NAME#v}"
-          if ! gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
-            gh release create "$GITHUB_REF_NAME" --title "vpnbox ${V}" \
-              --notes "Fresh stable-point release. See CHANGELOG.md for notes." \
-              --latest=true
-          fi
+          gh release create "$GITHUB_REF_NAME" \
+            --title "vpnbox ${V}" \
+            --notes "Fresh release. See CHANGELOG.md for notes." \
+            --prerelease=false
           gh release upload "$GITHUB_REF_NAME" \
-            dist/"vpnbox-${V}".tar.gz dist/SHA256SUMS --clobber
+            "dist/vpnbox-${V}.apk" "dist/vpnbox-${V}.aab" dist/SHA256SUMS "dist/mapping-${V}.txt" --clobber

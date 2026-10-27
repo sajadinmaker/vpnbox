@@ -1,0 +1,15 @@
+[submodule "android/engine/src/main/cpp/openvpn3"]
+	path = android/engine/src/main/cpp/openvpn3
+	url = https://github.com/schwabe/openvpn3.git
+[submodule "android/engine/src/main/cpp/asio"]
+	path = android/engine/src/main/cpp/asio
+	url = https://github.com/chriskohlhoff/asio
+[submodule "android/engine/src/main/cpp/lz4"]
+	path = android/engine/src/main/cpp/lz4
+	url = https://github.com/lz4/lz4.git
+[submodule "android/engine/src/main/cpp/fmt"]
+	path = android/engine/src/main/cpp/fmt
+	url = https://github.com/fmtlib/fmt
+[submodule "android/engine/src/main/cpp/openssl"]
+	path = android/engine/src/main/cpp/openssl
+	url = https://github.com/schwabe/platform_external_openssl.git

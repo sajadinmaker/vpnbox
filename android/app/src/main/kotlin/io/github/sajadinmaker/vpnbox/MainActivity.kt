@@ -1,10 +1,16 @@
 package io.github.sajadinmaker.vpnbox
 
+import android.Manifest
+import android.content.Intent
+import android.net.VpnService
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.LaunchedEffect
@@ -24,11 +30,43 @@ import io.github.sajadinmaker.vpnbox.ui.TerminalScreen
 import io.github.sajadinmaker.vpnbox.ui.theme.VpnboxTheme
 
 class MainActivity : ComponentActivity() {
+
+    /** Connect request waiting behind one of the two system dialogs. */
+    private var pendingConnect: Pair<String?, String?>? = null
+
+    /** Step 1 of the chain: the system VPN consent dialog. */
+    private val vpnConsentLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult(),
+    ) { result ->
+        val pending = pendingConnect
+        if (result.resultCode == RESULT_OK && pending != null) {
+            // consent granted — now (best-effort) the notification permission,
+            // then the actual connect
+            requestNotificationThenConnect(pending.first, pending.second)
+        } else {
+            pendingConnect = null
+            vmRef?.consentDeclined()
+        }
+    }
+
+    /** Step 2: POST_NOTIFICATIONS (Android 13+). Non-blocking for connect. */
+    private val notificationLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { _ ->
+        val pending = pendingConnect
+        pendingConnect = null
+        if (pending != null) vmRef?.connect(pending.first, pending.second)
+    }
+
+    /** ViewModel lives in the composition; the launchers need it earlier. */
+    private var vmRef: VpnViewModel? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
             val vm: VpnViewModel = viewModel()
+            vmRef = vm
             val settings by vm.settings.collectAsState()
             val systemDark = isSystemInDarkTheme()
             VpnboxTheme(
@@ -67,7 +105,8 @@ class MainActivity : ComponentActivity() {
                                 ui = home,
                                 onAction = { action ->
                                     when (action) {
-                                        HomeAction.ConnectFast -> vm.connect(null, null)
+                                        HomeAction.ConnectFast ->
+                                            guardedConnect(null, null)
                                         HomeAction.PickCountry -> {
                                             vm.rebuildCountries()
                                             picking = true
@@ -84,7 +123,7 @@ class MainActivity : ComponentActivity() {
                                     countries = countries,
                                     onPick = { pick ->
                                         picking = false
-                                        vm.connect(pick.cc, null)
+                                        guardedConnect(pick.cc, null)
                                     },
                                     onDismiss = { picking = false },
                                 )
@@ -93,6 +132,34 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
+        }
+    }
+
+    /**
+     * Every connect goes through the system dialogs first: `VpnService
+     * .prepare()` consent (result delivered through [vpnConsentLauncher],
+     * never through this Activity's onActivityResult) and — best effort —
+     * POST_NOTIFICATIONS on Android 13+. Disconnect is untouched.
+     */
+    private fun guardedConnect(country: String?, city: String?) {
+        val consent = VpnService.prepare(this)
+        if (consent != null) {
+            pendingConnect = Pair(country, city)
+            vpnConsentLauncher.launch(consent)
+        } else {
+            requestNotificationThenConnect(country, city)
+        }
+    }
+
+    private fun requestNotificationThenConnect(country: String?, city: String?) {
+        if (Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) !=
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            pendingConnect = Pair(country, city)
+            notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            vmRef?.connect(country, city)
         }
     }
 }

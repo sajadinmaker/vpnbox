@@ -1,10 +1,12 @@
 # Android build output
 build/
+.cxx/
 .gradle/
 local.properties
 captures/
 .DS_Store
 *.iml
+.kotlin/
 
 # Signing material — never publish the keystore or its passwords
 keystore.properties

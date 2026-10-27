@@ -1,125 +1,94 @@
 # vpnbox
 
-**A free VPN client for Linux.** No account, no key, no payment.
+A portable, volunteer-run VPN client for Android. No accounts, no keys, no
+analytics.
 
-`v1.0.0-beta5` · one Python file, standard library only · built by
-[sajadinmaker](https://github.com/sajadinmaker)
+Built as a Material 3 app by
+[sajadinmaker](https://github.com/sajadinmaker). vpnbox connects through the
+volunteer relays of [VPN Gate](https://vpngate.net), the academic experiment
+run by the University of Tsukuba.
 
-vpnbox connects through the volunteer relays of
-[VPN Gate](https://vpngate.net), the academic experiment run by the University
-of Tsukuba. It fetches the live server list, ranks it by reachability and
-speed, and connects through OpenVPN with a full tunnel and leak-safe DNS from
-systemd-resolved.
+## What it does
+
+vpnbox fetches the live VPN Gate relay list, lets you pick the fastest server
+or a server from a specific country, and connects through a real OpenVPN
+engine. If the tunnel drops, the app restores it automatically — it re-enters
+protection, retries recovery with backoff, and keeps the session intent until
+it succeeds or you disconnect.
+
+## Features
+
+- Live server list refresh from VPN Gate.
+- Fastest-server and per-country picking.
+- Automatic reconnect with backoff after a tunnel drop.
+- Material 3 UI with Material You dynamic colour.
+- System, light, and dark theme modes.
+- About and Settings screens.
+- No tracking, no analytics.
+- R8-minified APK of roughly 1.4 MB.
 
 ## Install
 
-```bash
-tar -xzf vpnbox-1.0.0-beta5.tar.gz
-cd vpnbox-1.0.0-beta5
-sudo ./install.sh
-```
+Download
+[`vpnbox-1.0.0-beta5-android.apk`](https://github.com/sajadinmaker/vpnbox/releases)
+from the GitHub Releases page. Releases carrying the Android app begin at the
+tag `v1.0.0-beta5-android`. The app requires Android 8.0 or newer.
 
-`install.sh` checks the requirements: OpenVPN 2.5+, systemd-resolved, and
-Python 3.8+. To remove vpnbox, run `sudo ./uninstall.sh`.
-
-## Commands
-
-Everything is a subcommand of `vpn`:
-
-| Command | Result |
-|---|---|
-| `vpn refresh` | Fetches the live server list. |
-| `vpn countries` | Shows what is reachable right now. |
-| `vpn servers JP` | Lists one country: cities, ISPs, ping, speed. |
-| `sudo vpn connect` | Connects to the fastest server. |
-| `vpn status` | Shows the exit IP and its city. |
-| `sudo vpn disconnect` | Stops the tunnel and restores routes and DNS. |
-| `sudo vpn watch` | Keeps a connected session alive: reconnects if the tunnel dies. |
-
-Connecting needs `sudo` because routes and DNS policies are system state. If a
-server refuses to handshake, vpnbox fails fast and tries the next best
-candidate, up to three attempts (`--max-tries N`). Pin a specific server with
-`--index N` or skip the first N ranked candidates with `--skip N`.
-
-## Keep a session alive
-
-Run `sudo vpn watch` right after `sudo vpn connect` (or attach it later) and
-leave the session running. If the daemon exits mid-session, the watchdog
-reconnects with the stored intent — the same country, city, office, transport —
-prints one line per event, and waits out repeated failures (30 s backoff, capped
-at 5 min). It stops after 3 failed recovery cycles (`--give-up n`), and
-Ctrl-C stops the watcher without touching the tunnel. `vpn disconnect` is always
-honored: the watchdog exits when you disconnect, even if it caught your
-disconnect in the middle of a recovery attempt.
-
-The detection rides on the OpenVPN channel itself: the daemon signals every
-10 s by default and exits when nothing answers for 60 s (`--ping`,
-`--ping-exit`; set `--ping-exit 0` to restore the old never-exit behavior).
-
-## Pick a country, city, or transport
+Your browser may warn about unknown sources, and Play Protect may flag the
+sideloaded APK. That is expected for apps installed outside the Play Store;
+verify the file against `SHA256SUMS` (attached to the same release) before
+installing:
 
 ```bash
-sudo vpn connect US                           # positional: code or name
-sudo vpn connect --country JP --city chiyoda  # filter by city
-sudo vpn connect CA --nearest                 # closest country that is alive
-sudo vpn connect --country US --proto tcp     # pin the transport
+sha256sum -c SHA256SUMS
 ```
 
-After `--country` or `--city`, the ranking is automatic. If the exit IP lands
-somewhere other than what you asked for, vpnbox says so.
+## Build from source
 
-## Interactive menu
-
-Run `vpn` with no arguments to open the menu. ↑/↓ selects, Enter runs, keys
-1–6 run entries directly, and `q` quits. The entries are the fastest server,
-a country or city, a platform office, list refresh, disconnect, and quit.
-Dialogs accept Enter for the default shown in the prompt and Esc to back out.
-Typed-ahead input is drained, so a fast number-then-Enter burst cannot answer
-the next dialog. The layout adapts from 46 to 120 columns, and a piped run
-prints a plain numbered list. Set `VPNBOX_PLAIN=1` to render a plain banner.
-
-## Appear near a platform office
-
-vpnbox knows the offices of 29 platforms (239 offices in 31 countries) and can
-route you through a server near one:
-
-| Command | Result |
-|---|---|
-| `vpn sites` | Lists the platform catalogue. |
-| `vpn sites --site meta` | Lists every Meta office and its nearest live server. |
-| `sudo vpn connect --site meta` | Connects near the Meta HQ in Menlo Park. |
-| `sudo vpn connect --site meta --office Seoul` | Connects near a specific office. |
-| `sudo vpn connect --site meta --office all` | Connects nearest to any office worldwide. |
-
-Office addresses are geocoded through OpenStreetMap and cached in
-`~/.cache/vpnbox/offices.json`. Offices fall into distance tiers. Within a
-tier, ping, speed, and UDP preference decide. The nearest office therefore
-still resolves to a server that is alive.
-
-## Limits
-
-- The volunteers pool changes hourly. Run `vpn refresh` before you connect.
-- Each operator sets its own logging policy. Read it with
-  `jq '.servers[] | .log' ~/.cache/vpnbox/servers.json`.
-- There is no kill switch. If OpenVPN exits abnormally, traffic resumes through
-  your normal connection. Add a firewall rule if you need one (ufw, outbound
-  only on `tun0`).
-- City names come from ip-api.com. Listings work without it.
-
-## Development
+Prerequisites: JDK 17 and the Android SDK. The repository uses the Android
+Gradle Plugin; all Gradle commands run from the `android/` directory.
 
 ```bash
-make check    # syntax checks
-make test     # hermetic unit tests, no network and no root
-make dist     # release tarball with checksums
+cd android
+./gradlew assembleDebug
 ```
 
-CI runs the tests on Python 3.9 through 3.13. `CONTRIBUTING.md` covers the
-design rules and the release checklist.
+Unit tests:
 
-## Attribution
+```bash
+./gradlew testDebugUnitTest
+```
+
+A release build signs with `android/keystore.properties`, which is gitignored.
+It must contain exactly four keys:
+
+```properties
+storeFile=/absolute/path/to/keystore.jks
+storePassword=...
+keyAlias=...
+keyPassword=...
+```
+
+The store file must contain a key whose name matches `keyAlias`.
+
+## Security notes
+
+A VPN Gate relay is a public network run by volunteers. Do not carry traffic
+you would not carry over an open Wi-Fi network. Each relay operator sets its
+own logging policy.
+
+The app talks to plain HTTP endpoints by design of the experiment: the VPN
+Gate mirror list, and ip-api.com for exit-IP geolocation in the server list.
+This is documented deliberately — it is how VPN Gate distributes its data.
+The app performs no analytics and makes no other network calls. Caches and
+settings stay on-device in app-private storage.
+
+## Transparency
+
+- Source:
+  [github.com/sajadinmaker/vpnbox](https://github.com/sajadinmaker/vpnbox)
+- Changes: [CHANGELOG.md](CHANGELOG.md)
+- License: [LICENSE](LICENSE) (MIT)
 
 Server list and relay profiles: VPN Gate Academic Experiment, University of
-Tsukuba. Geocoding: OpenStreetMap Nominatim. IP geolocation: ip-api.com.
-OpenVPN is a registered trademark of OpenVPN Inc. vpnbox is a client only. It
-operates no servers. Released under the MIT license. See `LICENSE`.
+Tsukuba.

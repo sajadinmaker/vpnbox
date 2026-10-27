@@ -21,8 +21,9 @@ import io.github.sajadinmaker.vpnbox.data.validateArgs
 import io.github.sajadinmaker.vpnbox.data.setDynamicColor
 import io.github.sajadinmaker.vpnbox.data.setThemeMode
 import io.github.sajadinmaker.vpnbox.data.ThemeMode
+import io.github.sajadinmaker.vpnbox.engine.EngineBus
 import io.github.sajadinmaker.vpnbox.engine.EngineEvent
-import io.github.sajadinmaker.vpnbox.engine.SimulatedEngine
+import io.github.sajadinmaker.vpnbox.engine.OpenVpn3Engine
 import java.io.File
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -63,7 +64,7 @@ data class TerminalUi(
 
 class VpnViewModel(app: Application) : AndroidViewModel(app) {
 
-    private val engine = SimulatedEngine()
+    private val engine = OpenVpn3Engine(app)
     private val filesDir: File = app.getExternalFilesDir(null) ?: app.filesDir
 
     private val cacheStore = CacheStore(File(filesDir, "servers.json"))
@@ -90,7 +91,7 @@ class VpnViewModel(app: Application) : AndroidViewModel(app) {
     private var connectJob: Job? = null
     private var watchJob: Job? = null
     private var hasHandshake = false
-    private var liveKillSignal = false
+    private var downPending = false
     private val cycleMax = 3
 
     private var started = false
@@ -109,6 +110,32 @@ class VpnViewModel(app: Application) : AndroidViewModel(app) {
         intent = sessionStore.load()
         projectCacheToHome()
         refreshGeoLabel()
+        restoreRunningTunnel()
+    }
+
+    /**
+     * Relaunch projection: the engine service keeps running when the UI
+     * process dies; on relaunch we re-derive truth from the engine itself
+     * (like the CLI, which always asks the system for the daemon's state).
+     */
+    private fun restoreRunningTunnel() {
+        if (!EngineBus.tunnelUp.value) return
+        val saved = intent
+        if (saved != null && !saved.stopped) {
+            hasHandshake = true
+            home.update { it.copy(connected = true) }
+            screen.value = Screen.TERMINAL
+            terminal.value = TerminalUi(
+                phase = WatchPhase.WATCH,
+                lines = listOf(
+                    TerminalLine(
+                        "Tunnel already active — continuing the session",
+                        TerminalLine.Tone.OK,
+                    ),
+                ),
+            )
+            startWatchLoop(saved.country, saved.city, saved.pingExit)
+        }
     }
 
     private fun projectCacheToHome() {
@@ -184,7 +211,8 @@ class VpnViewModel(app: Application) : AndroidViewModel(app) {
         screen.value = Screen.TERMINAL
         terminal.value = TerminalUi(phase = WatchPhase.CONNECT)
         intent = null
-        connectJob?.cancel()
+        downPending = false   // a stale Down from the previous session must not
+        connectJob?.cancel()  // arm this attempt's watchdog
         // the whole connect path (fetch, parse, enrich, engine delays) is
         // blocking/network work — off the main thread, like launch() in the CLI
         connectJob = viewModelScope.launch(Dispatchers.IO) {
@@ -279,6 +307,14 @@ class VpnViewModel(app: Application) : AndroidViewModel(app) {
             line("Exit IP: ${geo["query"]}", TerminalLine.Tone.PLAIN)
             line("Location: $where · ISP ${geo["isp"]?.ifBlank { "?" }}",
                  TerminalLine.Tone.PLAIN)
+            // CLI parity: the exit must be in the country the user picked —
+            // any mismatch means full-tunnel routing is not active
+            val geoCc = geo["countryCode"]?.uppercase()
+            if (!geoCc.isNullOrBlank() && geoCc != r.cc.uppercase()) {
+                line("Warning: exit IP country ($geoCc) differs from the " +
+                     "selected server (${r.cc.uppercase()}) — full-tunnel " +
+                     "routing may not be active", TerminalLine.Tone.WARN)
+            }
         }
         line("You can disconnect from the home screen", TerminalLine.Tone.PLAIN)
         terminal.update { it.copy(phase = WatchPhase.WATCH) }
@@ -297,13 +333,13 @@ class VpnViewModel(app: Application) : AndroidViewModel(app) {
             var failures = 0
             while (true) {
                 delay(1500)
-                if (!liveKillSignal) {
+                if (!downPending) {
                     if (sessionStore.load()?.stopped == true) {
                         return@launch          // disconnect while we were watching
                     }
-                    continue                   // the simulated daemon never dies on its own
+                    continue                   // tunnel still up — keep watching
                 }
-                liveKillSignal = false
+                downPending = false
                 line("Tunnel down", TerminalLine.Tone.WARN)
                 terminal.update { it.copy(phase = WatchPhase.KILL) }
                 val pending = intent ?: return@launch
@@ -363,10 +399,12 @@ class VpnViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** "Kill tunnel" chip — the same one-shot the real engine's Down event
-     * will carry once the OpenVPN core lands. */
+    /** "Kill tunnel" chip — emulate the CLI's one-shot teardown: the core is
+     * asked to exit; its Down event arms the watchdog exactly like a real
+     * drop would. */
     fun killTunnel() {
-        liveKillSignal = true
+        downPending = true
+        viewModelScope.launch(Dispatchers.IO) { engine.stop() }
     }
 
     fun dismissAndGoHome() {
@@ -426,11 +464,21 @@ class VpnViewModel(app: Application) : AndroidViewModel(app) {
                 for (l in e.excerpt) line("× $l", TerminalLine.Tone.ERR)
             }
             EngineEvent.HandshakeOk -> Unit  // succeed() renders the OK block
-            EngineEvent.Down -> Unit         // watchdog consumes its own signal
+            EngineEvent.Down -> downPending = true  // watchdog consumes it
         }
     }
 
     // ---- disconnect ---------------------------------------------------------
+
+    /** User pressed "Cancel" on the system VPN consent dialog. */
+    fun consentDeclined() {
+        home.update {
+            it.copy(
+                connected = false,
+                message = "VPN permission was declined — allow it to connect",
+            )
+        }
+    }
 
     fun disconnect() {
         watchJob?.cancel()
