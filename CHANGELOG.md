@@ -39,6 +39,24 @@ cycle uses `1.0.0-beta1`, `1.0.0-beta2`, …
   directory otherwise) instead of world-writable `/tmp` and `/var/tmp`.
   Legacy paths are still read so an upgrade keeps existing state.
 
+## 1.0.0-beta5-android — 2026-10-27
+
+First Android client release, at the same beta milestone as the CLI.
+
+### Android
+- Material 3 client built with Jetpack Compose: Connect, Choose a country
+  or city, Refresh, Disconnect.
+- Live-session screen with automatic-restore phases (protection, recovery,
+  failure) mirroring the CLI's `vpn watch` logic.
+- Settings screen with theme mode (system/light/dark) and Material You
+  dynamic color, persisted with Jetpack DataStore.
+- About screen with version, engine disclosure, source links, and VPN Gate
+  attribution.
+- All screen strings are resources and per-app locale config is wired, so
+  translations can land without code changes.
+- Release build: R8 shrinking with resource shrinking, signed with a
+  dedicated release key. Universal APK and Play Store AAB are provided.
+
 ## 1.0.0-beta5 — 2026-10-24
 
 ### Added

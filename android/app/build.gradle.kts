@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
   alias(libs.plugins.android.application)
   alias(libs.plugins.compose.compiler)
@@ -15,10 +17,30 @@ android {
     versionName = "1.0.0-beta5-android"
   }
 
+  signingConfigs {
+    // Release keystore lives outside the repo; android/keystore.properties is
+    // gitignored. Without it, release builds fall back to the debug key.
+    if (rootProject.file("keystore.properties").exists()) {
+      val ks = Properties().apply {
+        rootProject.file("keystore.properties").inputStream().use { load(it) }
+      }
+      create("release") {
+        storeFile = file(ks.getProperty("storeFile"))
+        storePassword = ks.getProperty("storePassword")
+        keyAlias = ks.getProperty("keyAlias")
+        keyPassword = ks.getProperty("keyPassword")
+      }
+    }
+  }
+
   buildTypes {
     release {
-      isMinifyEnabled = false
+      isMinifyEnabled = true
+      isShrinkResources = true
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+      if (rootProject.file("keystore.properties").exists()) {
+        signingConfig = signingConfigs.getByName("release")
+      }
     }
   }
   compileOptions {
