@@ -38,6 +38,13 @@ object VpnGate {
             "connect-retry 2  8\n" +
             "connect-retry-max 3\n" +
             "pull-filter ignore \"bypass-dhcp\"\n" +
+            // VPN Gate relays authenticate with the service's fixed anonymous
+            // pair ('vpn'/'vpn' — stated on the public server list). The relay
+            // sends AUTH_FAILED for empty credentials otherwise.
+            "<auth-user-pass>\n" +
+            "vpn\n" +
+            "vpn\n" +
+            "</auth-user-pass>\n" +
             "# full-tunnel enforcement — don't trust the server to push these:\n" +
             "redirect-gateway def1\n" +
             "block-ipv6\n"

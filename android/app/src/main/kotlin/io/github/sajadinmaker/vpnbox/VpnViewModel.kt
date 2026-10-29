@@ -1,6 +1,8 @@
 package io.github.sajadinmaker.vpnbox
 
 import android.app.Application
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -153,13 +155,59 @@ class VpnViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun refreshGeoLabel() {
-        viewModelScope.launch {
-            val g = withContext(Dispatchers.IO) { VpnGate.fetchGeo() } ?: return@launch
+        viewModelScope.launch(Dispatchers.IO) {
+            bindUntilVpnReady()             // probe the actual egress, not the
+            val g = VpnGate.fetchGeo() ?: return@launch
+
             val where = listOf(g["city"], g["regionName"], g["country"])
                 .filter { !it.isNullOrBlank() }.joinToString(", ")
             home.update {
                 it.copy(geoLabel = "${g["query"]}  ·  $where")
             }
+        }
+    }
+
+    /**
+     * While a tunnel is up, the exit-IP probe must measure the tunnel's
+     * egress — routing through the VPN network, not whatever the system
+     * considers the device default. (Matches the automatic default on most
+     * devices; definitive on network stacks that keep app sockets on the
+     * underlying network.)
+     *
+     * Returns true when the process actually got bound: right after the
+     * handshake the VPN network may still be CONNECTING and reject the bind
+     * — callers that must not measure the wrong egress use
+     * [bindUntilVpnReady] to retry.
+     */
+    private fun bindToVpnNetworkIfAny(): Boolean {
+        return runCatching {
+            val cm = getApplication<Application>()
+                .getSystemService(ConnectivityManager::class.java)
+                ?: return false
+            val vpn = cm.allNetworks.firstOrNull { n ->
+                cm.getNetworkCapabilities(n)
+                    ?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) == true
+            } ?: return false
+            cm.bindProcessToNetwork(vpn)
+        }.getOrDefault(false)
+    }
+
+    /** Bind for the exit-IP probe, retrying briefly while the VPN network is
+     * still coming up (an un-bound probe measures the underlying network). */
+    private suspend fun bindUntilVpnReady(): Boolean {
+        repeat(10) {
+            if (bindToVpnNetworkIfAny()) return true
+            delay(500)
+        }
+        return bindToVpnNetworkIfAny()
+    }
+
+    /** Reset the probe binding to the system default. */
+    private fun unbindFromNetwork() {
+        runCatching {
+            val cm = getApplication<Application>()
+                .getSystemService(ConnectivityManager::class.java) ?: return
+            cm.bindProcessToNetwork(null)
         }
     }
 
@@ -301,6 +349,7 @@ class VpnViewModel(app: Application) : AndroidViewModel(app) {
         line("Connected · ${r.country}" +
              (if (r.city.isNotBlank()) " · ${r.city}" else ""),
              TerminalLine.Tone.OK)
+        bindUntilVpnReady()
         VpnGate.fetchGeo()?.let { geo ->
             val where = listOf(geo["city"], geo["regionName"], geo["country"])
                 .filter { !it.isNullOrBlank() }.joinToString(", ")
@@ -355,6 +404,9 @@ class VpnViewModel(app: Application) : AndroidViewModel(app) {
                 val (sel, _) = selectServers(cache?.servers.orEmpty(), country, city)
                 var recovered: Server? = null
                 for (r in sel.take(3)) {
+                    // the killed network may still be the process binding —
+                    // the core's transport sockets would die with ENETUNREACH
+                    unbindFromNetwork()
                     attemptLine(0, 3, r)
                     if (engine.start(r, keepalive = Pair(10, exit)).isSuccess) {
                         recovered = r
@@ -403,6 +455,7 @@ class VpnViewModel(app: Application) : AndroidViewModel(app) {
      * asked to exit; its Down event arms the watchdog exactly like a real
      * drop would. */
     fun killTunnel() {
+        unbindFromNetwork()   // don't leave the process on the dying network
         downPending = true
         viewModelScope.launch(Dispatchers.IO) { engine.stop() }
     }
@@ -464,7 +517,12 @@ class VpnViewModel(app: Application) : AndroidViewModel(app) {
                 for (l in e.excerpt) line("× $l", TerminalLine.Tone.ERR)
             }
             EngineEvent.HandshakeOk -> Unit  // succeed() renders the OK block
-            EngineEvent.Down -> downPending = true  // watchdog consumes it
+            is EngineEvent.Down -> {
+                // the tunnel network is gone — unbind so the core's next
+                // transport sockets don't open on a dead network id
+                unbindFromNetwork()
+                downPending = true           // watchdog consumes it
+            }
         }
     }
 
@@ -484,6 +542,7 @@ class VpnViewModel(app: Application) : AndroidViewModel(app) {
         watchJob?.cancel()
         connectJob?.cancel()
         engine.stop()
+        unbindFromNetwork()   // the tunnel network is gone; don't stay bound
         hasHandshake = false
         // intent first: the teardown must never race the watchdog into
         // resurrecting the tunnel the user just asked to stop

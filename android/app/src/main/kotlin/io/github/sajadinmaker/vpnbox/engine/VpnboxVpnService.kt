@@ -39,6 +39,9 @@ class VpnboxVpnService : VpnService() {
 
     override fun onCreate() {
         super.onCreate()
+        // the OpenVPN3 JNI bindings must be backed by libovpn3.so before the
+        // first TunnelClient is constructed
+        Ovpn3Lib.ensure()
         ensureChannel()
     }
 
@@ -205,6 +208,8 @@ class VpnboxVpnService : VpnService() {
         }
 
         override fun tun_builder_set_layer(layer: Int): Boolean = layer == 3
+
+        override fun tun_builder_set_session_name(name: String): Boolean = true
 
         override fun tun_builder_add_address(
             address: String,

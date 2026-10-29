@@ -84,8 +84,8 @@ class DomainTest {
         assertFalse(conf.contains("ping-exit"))
         assertTrue(conf.contains("redirect-gateway def1"))
         val withPing = buildConf(s, keepalive = Pair(10, 60))
-        assertTrue(withPing.contains("\nping 10\n"))
-        assertTrue(withPing.contains("ping-exit 60\n"))
+        assertTrue(withPing.contains("\nkeepalive 10 60\n"))
+        assertFalse(withPing.contains("ping-exit"))
     }
 
     @Test

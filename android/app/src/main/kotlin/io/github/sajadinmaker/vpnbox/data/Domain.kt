@@ -108,9 +108,13 @@ fun buildConf(
     val sb = StringBuilder(VpnGate.EXTRA_CONFIG)
     if (keepalive != null) {
         val (interval, exitAfter) = keepalive
-        if (interval > 0) {
-            sb.append("\nping ").append(interval).append('\n')
-            if (exitAfter > 0) sb.append("ping-exit ").append(exitAfter).append('\n')
+        if (interval > 0 && exitAfter > 0) {
+            // OpenVPN 3 form: `keepalive <interval> <timeout>` probe both ways.
+            // The v2 `ping`/`ping-exit` pair is fatal for the OpenVPN3 core
+            // ("Option allowed only to be pushed by the server"); the keepalive
+            // timeout still ends a dead tunnel, and the watchdog re-connects.
+            sb.append("\nkeepalive ").append(interval)
+                .append(' ').append(exitAfter).append('\n')
         }
     }
     val header = "### vpnbox profile — server ${r.host} (${r.country})\n" +

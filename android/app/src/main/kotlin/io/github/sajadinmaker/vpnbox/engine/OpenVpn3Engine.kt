@@ -43,11 +43,23 @@ class OpenVpn3Engine(private val context: Context) : TunnelEngine {
         }
         return when (settled) {
             is EngineEvent.HandshakeOk -> Result.success(Unit)
-            is EngineEvent.HandshakeFailed -> Result.failure(
-                VpnGateEngineError(settled.excerpt.joinToString("\n")),
-            )
-            else -> Result.failure(VpnGateEngineError("handshake timed out"))
+            is EngineEvent.HandshakeFailed -> {
+                teardown()            // a dead handshake must not keep polling
+                Result.failure(
+                    VpnGateEngineError(settled.excerpt.joinToString("\n")),
+                )
+            }
+            else -> {
+                teardown()
+                Result.failure(VpnGateEngineError("handshake timed out"))
+            }
         }
+    }
+
+    /** Stop the core thread after a failed/timed-out handshake; the service
+     * ends too (start of the next attempt re-spins it). */
+    private fun teardown() {
+        stop()
     }
 
     override fun stop() {
