@@ -30,9 +30,9 @@ it succeeds or you disconnect.
 ## Install
 
 Download
-[`vpnbox-1.0.0-beta5-android.apk`](https://github.com/sajadinmaker/vpnbox/releases)
-from the GitHub Releases page. Releases carrying the Android app begin at the
-tag `v1.0.0-beta5-android`. The app requires Android 8.0 or newer.
+[`vpnbox-1.0.0-beta6-android.apk`](https://github.com/sajadinmaker/vpnbox/releases)
+from the GitHub Releases page. Android releases begin at the tag
+`v1.0.0-beta5-android`. The app requires Android 8.0 or newer.
 
 Your browser may warn about unknown sources, and Play Protect may flag the
 sideloaded APK. That is expected for apps installed outside the Play Store;

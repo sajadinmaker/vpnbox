@@ -3,7 +3,7 @@
 All notable changes to vpnbox. The first stable will be `1.0.0`; the beta
 cycle uses `1.0.0-beta1`, `1.0.0-beta2`, …
 
-## Unreleased
+## 1.0.0-beta6-android — 2026-10-30
 
 ### Removed
 - The Python CLI (`vpnbox` command, install/uninstall scripts, and the Python
@@ -11,7 +11,50 @@ cycle uses `1.0.0-beta1`, `1.0.0-beta2`, …
   product; CLI behavior that matters — server ranking, watchdog recovery,
   profile hardening — was ported to the Android app before removal.
 
+### Added
+- A real OpenVPN 3 core now runs inside the app: `libovpn3.so` is built from
+  pinned upstream sources (the ics-openvpn pins of openvpn3/openssl/asio/
+  lz4/fmt in a new `:engine` module, vendored lzo, committed SWIG JNI
+  bindings) — no simulator, no third-party opaque dependency.
+- The core runs inside `VpnboxVpnService` through the `TunnelEngine` seam,
+  and the watchdog re-arms on real `Down` events.
+- Connect is gated behind the system VPN consent dialog plus a best-effort
+  POST_NOTIFICATIONS request; relaunch restores an already-running tunnel;
+  the exit-IP country is checked against the selected server.
+
 ### Fixed
+- The exit-IP probe now binds to the VPN network (retrying briefly while the
+  network is still coming up) so it measures the tunnel's egress instead of
+  the underlying connection, and unbinds on every teardown path — a stale
+  binding previously killed reconnections with ENETUNREACH.
+- OpenVPN keepalive is emitted as `keepalive <interval> <timeout>` — the
+  v2-style `ping`/`ping-exit` pair was fatal for the OpenVPN 3 core.
+- VPN Gate's anonymous `vpn`/`vpn` credentials are submitted inline;
+  relays answered AUTH_FAILED to empty ones.
+- A failed or timed-out handshake now stops the core thread instead of
+  leaving it polling forever.
+- The version label on the home screen comes from `BuildConfig` instead of
+  a hard-coded string.
+
+## 1.0.0-beta5-android — 2026-10-27
+
+First Android client release, at the same beta milestone as the CLI.
+
+### Android
+- Material 3 client built with Jetpack Compose: Connect, Choose a country
+  or city, Refresh, Disconnect.
+- Live-session screen with automatic-restore phases (protection, recovery,
+  failure) mirroring the CLI's `vpn watch` logic.
+- Settings screen with theme mode (system/light/dark) and Material You
+  dynamic color, persisted with Jetpack DataStore.
+- About screen with version, engine disclosure, source links, and VPN Gate
+  attribution.
+- All screen strings are resources and per-app locale config is wired, so
+  translations can land without code changes.
+- Release build: R8 shrinking with resource shrinking, signed with a
+  dedicated release key. Universal APK and Play Store AAB are provided.
+
+### CLI (last shipped state, still present at this tag)
 - `vpn status --no-ip` no longer prints your unprotected address while the
   tunnel is down. The flag now suppresses the lookup in every state.
 - A failed public-IP lookup no longer turns a successful connect, or a
@@ -38,30 +81,10 @@ cycle uses `1.0.0-beta1`, `1.0.0-beta2`, …
   a readable message instead of an unhandled traceback mid-teardown.
 - The interactive prompts stop instead of spinning on a detached terminal
   (EOF in raw mode used to busy-loop).
-
-### Changed
 - The tunnel profile, session intent, and metadata now live in a private
   runtime directory (`/run/vpnbox` when invoked as root, the user's runtime
   directory otherwise) instead of world-writable `/tmp` and `/var/tmp`.
   Legacy paths are still read so an upgrade keeps existing state.
-
-## 1.0.0-beta5-android — 2026-10-27
-
-First Android client release, at the same beta milestone as the CLI.
-
-### Android
-- Material 3 client built with Jetpack Compose: Connect, Choose a country
-  or city, Refresh, Disconnect.
-- Live-session screen with automatic-restore phases (protection, recovery,
-  failure) mirroring the CLI's `vpn watch` logic.
-- Settings screen with theme mode (system/light/dark) and Material You
-  dynamic color, persisted with Jetpack DataStore.
-- About screen with version, engine disclosure, source links, and VPN Gate
-  attribution.
-- All screen strings are resources and per-app locale config is wired, so
-  translations can land without code changes.
-- Release build: R8 shrinking with resource shrinking, signed with a
-  dedicated release key. Universal APK and Play Store AAB are provided.
 
 ## 1.0.0-beta5 — 2026-10-24
 
