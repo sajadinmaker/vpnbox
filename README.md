@@ -21,18 +21,19 @@ it succeeds or you disconnect.
 - Live server list refresh from VPN Gate.
 - Fastest-server and per-country picking.
 - Automatic reconnect with backoff after a tunnel drop.
+- A real OpenVPN 3 client core embedded in the app (see [NOTICE](NOTICE)).
 - Material 3 UI with Material You dynamic colour.
 - System, light, and dark theme modes.
 - About and Settings screens.
 - No tracking, no analytics.
-- R8-minified APK of roughly 1.4 MB.
 
 ## Install
 
 Download
 [`vpnbox-1.0.0-beta6-android.apk`](https://github.com/sajadinmaker/vpnbox/releases)
-from the GitHub Releases page. Android releases begin at the tag
-`v1.0.0-beta5-android`. The app requires Android 8.0 or newer.
+(~34 MB — the OpenVPN 3 core ships inside for four ABIs) from the GitHub
+Releases page. Android releases begin at the tag `v1.0.0-beta5-android`.
+The app requires Android 8.0 or newer.
 
 Your browser may warn about unknown sources, and Play Protect may flag the
 sideloaded APK. That is expected for apps installed outside the Play Store;
@@ -88,7 +89,9 @@ settings stay on-device in app-private storage.
 - Source:
   [github.com/sajadinmaker/vpnbox](https://github.com/sajadinmaker/vpnbox)
 - Changes: [CHANGELOG.md](CHANGELOG.md)
-- License: [LICENSE](LICENSE) (MIT)
+- License: vpnbox itself is [MIT](LICENSE); the bundled OpenVPN 3 core and
+  its dependencies keep their own licenses — full list with sources in
+  [NOTICE](NOTICE)
 
 Server list and relay profiles: VPN Gate Academic Experiment, University of
 Tsukuba.

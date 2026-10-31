@@ -1,0 +1,38 @@
+vpnbox — bundled components and licenses
+========================================
+
+vpnbox's own source code is MIT-licensed (see LICENSE). The released Android
+build statically bundles the following components, which keep their original
+licenses. The full source of every component is in this repository:
+
+  Component  License                              Source in this repo
+  ---------  -----------------------------------  --------------------------------
+  OpenVPN 3  AGPL-3.0-only OR MPL-2.0, with the   android/engine/src/main/cpp/
+  core       openvpn3-exceptions (OpenSSL link    openvpn3  (submodule, pinned;
+             exception; see openvpn3/LICENSE.md)  LICENSES/ holds all texts)
+             — this build relies on the MPL-2.0
+             alternative for the core sources,
+             and the OpenSSL link exception for
+             the bundled OpenSSL
+  OpenSSL    Apache-2.0 (module marked            android/engine/src/main/cpp/
+             BSD_like for Android; NOTICE file    openssl  (submodule, pinned;
+             inside)                              NOTICE + LICENSE inside)
+  asio       Boost Software License 1.0           android/engine/src/main/cpp/asio
+                                                  (submodule; COPYING)
+  fmt        MIT                                  android/engine/src/main/cpp/fmt
+                                                  (submodule; LICENSE)
+  lz4        BSD-2-Clause (command-line parts     android/engine/src/main/cpp/lz4
+             GPL-2.0, not used by the app)        (submodule; LICENSE + lib/LICENSE)
+  LZO 2.10   GPL-2.0-or-later                     android/engine/src/main/cpp/lzo
+             (vendored; COPYING inside)           (vendored; COPYING)
+
+The SWIG-generated JNI bindings under
+android/engine/src/main/java/net/openvpn/ovpn3 and the wrapper
+android/engine/src/main/cpp/ovpncli_wrap.* were generated from the OpenVPN 3
+core headers and carry its license terms.
+
+The complete Android application (vpnbox code + the bundled core above) is
+therefore distributed under the compatible set of the licenses above: in
+practice the copyleft terms of the strongest component govern redistribution
+of the binary, and the corresponding sources for all components are provided
+here for every release tag.

@@ -2,6 +2,7 @@ package io.github.sajadinmaker.vpnbox
 
 import io.github.sajadinmaker.vpnbox.data.Server
 import io.github.sajadinmaker.vpnbox.data.UserError
+import io.github.sajadinmaker.vpnbox.data.VpnGate.EXTRA_CONFIG
 import io.github.sajadinmaker.vpnbox.data.backoffSeconds
 import io.github.sajadinmaker.vpnbox.data.buildConf
 import io.github.sajadinmaker.vpnbox.data.checkPingSettings
@@ -86,6 +87,27 @@ class DomainTest {
         val withPing = buildConf(s, keepalive = Pair(10, 60))
         assertTrue(withPing.contains("\nkeepalive 10 60\n"))
         assertFalse(withPing.contains("ping-exit"))
+    }
+
+    @Test
+    fun `buildConf with keepalive off emits no keepalive line`() {
+        val conf = buildConf(server("6"), keepalive = null)
+        assertFalse(conf.contains("\nkeepalive "))
+        assertFalse(conf.contains("\nping "))
+    }
+
+    @Test
+    fun `profile additions carry vpn gate anonymous creds and full tunnel enforcement`() {
+        // VPN Gate relays answer AUTH_FAILED to empty credentials; the
+        // anonymous pair vpn/vpn is the documented service credential and the
+        // OpenVPN 3 core auto-submits an inline <auth-user-pass> block.
+        val c = EXTRA_CONFIG
+        assertTrue(c.contains("<auth-user-pass>\nvpn\nvpn\n</auth-user-pass>"))
+        // full-tunnel routing must never trust the server to push it
+        assertTrue(c.contains("redirect-gateway def1"))
+        assertTrue(c.contains("block-ipv6"))
+        // the pull-filter keeps hostile relays from clearing the enforced route
+        assertTrue(c.contains("pull-filter ignore"))
     }
 
     @Test

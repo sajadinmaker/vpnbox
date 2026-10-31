@@ -23,6 +23,9 @@ cycle uses `1.0.0-beta1`, `1.0.0-beta2`, …
   the exit-IP country is checked against the selected server.
 
 ### Fixed
+- Release builds keep the generated OpenVPN 3 JNI callback package intact
+  under R8 — shrinking it made every release connect crash with
+  `NoSuchMethodError` (caught by the release smoke test).
 - The exit-IP probe now binds to the VPN network (retrying briefly while the
   network is still coming up) so it measures the tunnel's egress instead of
   the underlying connection, and unbinds on every teardown path — a stale
